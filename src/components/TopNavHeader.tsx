@@ -1,11 +1,15 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { MultiplayerState } from '../types';
-import { Building2, Users, BookOpen, FileSpreadsheet, RotateCcw, RefreshCw, Layers } from 'lucide-react';
+import { Building2, Users, BookOpen, FileSpreadsheet, RotateCcw, RefreshCw, Layers, Volume2, VolumeX, Music } from 'lucide-react';
 import { PLAYER_COLORS } from './LobbyScreen';
 
 interface TopNavHeaderProps {
   multiplayerState: MultiplayerState;
   historyLength: number;
+  isMuted: boolean;
+  onToggleMute: () => void;
+  isMusicEnabled: boolean;
+  onToggleMusic: () => void;
   onOpenLobby: () => void;
   onOpenRules: () => void;
   onOpenXls: () => void;
@@ -18,6 +22,10 @@ interface TopNavHeaderProps {
 export const TopNavHeader: React.FC<TopNavHeaderProps> = ({
   multiplayerState,
   historyLength,
+  isMuted,
+  onToggleMute,
+  isMusicEnabled,
+  onToggleMusic,
   onOpenLobby,
   onOpenRules,
   onOpenXls,
@@ -28,7 +36,13 @@ export const TopNavHeader: React.FC<TopNavHeaderProps> = ({
 }) => {
   const [isHovered, setIsHovered] = useState<boolean>(false);
   const [isMobileOpen, setIsMobileOpen] = useState<boolean>(false);
-  const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
+    };
+  }, []);
 
   const { totalPlayers, players, currentTurnIndex } = multiplayerState;
   const isSolo = totalPlayers === 1;
@@ -162,6 +176,47 @@ export const TopNavHeader: React.FC<TopNavHeaderProps> = ({
               <span className="hidden sm:inline">Undo ({historyLength})</span>
             </button>
 
+            {/* Separate SFX Toggle */}
+            <button
+              onClick={onToggleMute}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 border rounded-xl text-xs font-semibold transition-colors whitespace-nowrap shrink-0 ${
+                isMuted
+                  ? 'bg-[#fae8e4] hover:bg-[#f4d6cf] text-[#9a3425] border-[#efb3a5]'
+                  : 'bg-[#f4efe6] hover:bg-[#ebe3d4] text-[#292524] border-[#ddd4c3]'
+              }`}
+              title={isMuted ? 'SFX Dimatikan (Klik untuk Nyalakan)' : 'SFX Aktif (Klik untuk Matikan)'}
+            >
+              {isMuted ? (
+                <VolumeX className="w-3.5 h-3.5 text-[#c85a4b]" />
+              ) : (
+                <Volume2 className="w-3.5 h-3.5 text-[#4d8b5d]" />
+              )}
+              <span className="hidden sm:inline">{isMuted ? 'SFX Off' : 'SFX On'}</span>
+            </button>
+
+            {/* Separate Cozy Music & Ambience Toggle */}
+            <button
+              onClick={onToggleMusic}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 border rounded-xl text-xs font-semibold transition-colors whitespace-nowrap shrink-0 ${
+                !isMusicEnabled
+                  ? 'bg-[#fae8e4] hover:bg-[#f4d6cf] text-[#9a3425] border-[#efb3a5]'
+                  : 'bg-[#eef6f0] hover:bg-[#e1efe4] text-[#235430] border-[#b7dabf]'
+              }`}
+              title={
+                isMusicEnabled
+                  ? 'Musik & Ambience Aktif (Klik untuk Matikan)'
+                  : 'Musik & Ambience Dimatikan (Klik untuk Nyalakan)'
+              }
+            >
+              <span className="relative inline-flex items-center justify-center w-3.5 h-3.5">
+                <Music className={`w-3.5 h-3.5 ${isMusicEnabled ? 'text-[#4d8b5d]' : 'text-[#c85a4b] opacity-75'}`} />
+                {!isMusicEnabled && (
+                  <span className="absolute w-4 h-[1.5px] bg-[#c85a4b] rotate-45 rounded-full" />
+                )}
+              </span>
+              <span className="hidden sm:inline">{isMusicEnabled ? 'Musik On' : 'Musik Off'}</span>
+            </button>
+
             <button
               onClick={onResetGame}
               className="flex items-center gap-1.5 px-3.5 py-1.5 cozy-btn-primary font-bold rounded-xl text-xs transition-transform active:scale-95 whitespace-nowrap shrink-0"
@@ -174,20 +229,62 @@ export const TopNavHeader: React.FC<TopNavHeaderProps> = ({
         </div>
       </div>
 
-      {/* Auto-Hide Hover Trigger Strip (Always visible warm wooden/cream tab at top) */}
-      <button
-        onClick={() => setIsMobileOpen(!isMobileOpen)}
-        className="pointer-events-auto bg-[#fbf8f2]/95 hover:bg-[#fffdf9] text-[#57534e] hover:text-[#292524] border border-t-0 border-[#ddd4c3] rounded-b-2xl px-4 py-1.5 shadow-md text-xs font-semibold flex items-center gap-2 backdrop-blur-md transition-all active:scale-95"
-        title="Menu Navigasi (Arahkan Kursor / Sentuh)"
-      >
-        <Building2 className="w-3.5 h-3.5 text-[#c86b4a]" />
-        <span className="font-bold text-[11px] text-[#292524] whitespace-nowrap">
-          Menu Utama {isVisible ? '▲' : '▼'}
-        </span>
-        <span className="text-[10px] text-[#78716c] hidden sm:inline whitespace-nowrap">
-          · Arahkan kursor
-        </span>
-      </button>
+      {/* Auto-Hide Hover Trigger Strip + Quick Compact SFX & Music Toggles */}
+      <div className="flex items-center gap-1.5 pointer-events-auto">
+        <button
+          onClick={() => setIsMobileOpen(!isMobileOpen)}
+          className="bg-[#fbf8f2]/95 hover:bg-[#fffdf9] text-[#57534e] hover:text-[#292524] border border-t-0 border-[#ddd4c3] rounded-b-2xl px-4 py-1.5 shadow-md text-xs font-semibold flex items-center gap-2 backdrop-blur-md transition-all active:scale-95"
+          title="Menu Navigasi (Arahkan Kursor / Sentuh)"
+        >
+          <Building2 className="w-3.5 h-3.5 text-[#c86b4a]" />
+          <span className="font-bold text-[11px] text-[#292524] whitespace-nowrap">
+            Menu Utama {isVisible ? '▲' : '▼'}
+          </span>
+          <span className="text-[10px] text-[#78716c] hidden sm:inline whitespace-nowrap">
+            · Arahkan kursor
+          </span>
+        </button>
+
+        {/* Quick SFX Toggle */}
+        <button
+          onClick={onToggleMute}
+          className={`border border-t-0 rounded-b-2xl px-2.5 py-1.5 shadow-md backdrop-blur-md transition-all active:scale-95 flex items-center gap-1 text-[10px] font-bold ${
+            isMuted
+              ? 'bg-[#fae8e4]/95 hover:bg-[#f5dcd6] border-[#efb3a5] text-[#9a3425]'
+              : 'bg-[#fbf8f2]/95 hover:bg-[#fffdf9] border-[#ddd4c3] text-[#4d8b5d]'
+          }`}
+          title={isMuted ? 'SFX Dimatikan (Klik untuk Nyalakan)' : 'SFX Aktif (Klik untuk Matikan)'}
+          aria-label={isMuted ? 'Nyalakan SFX' : 'Matikan SFX'}
+        >
+          {isMuted ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
+          <span className="hidden md:inline">SFX</span>
+        </button>
+
+        {/* Quick Cozy Music & Ambience Toggle */}
+        <button
+          onClick={onToggleMusic}
+          className={`border border-t-0 rounded-b-2xl px-2.5 py-1.5 shadow-md backdrop-blur-md transition-all active:scale-95 flex items-center gap-1 text-[10px] font-bold ${
+            !isMusicEnabled
+              ? 'bg-[#fae8e4]/95 hover:bg-[#f5dcd6] border-[#efb3a5] text-[#9a3425]'
+              : 'bg-[#eef6f0]/95 hover:bg-[#e4f2e8] border-[#b7dabf] text-[#2e683d]'
+          }`}
+          title={
+            isMusicEnabled
+              ? 'Musik & Ambience Aktif (Klik untuk Matikan)'
+              : 'Musik & Ambience Dimatikan (Klik untuk Nyalakan)'
+          }
+          aria-label={isMusicEnabled ? 'Matikan Musik & Ambience' : 'Nyalakan Musik & Ambience'}
+        >
+          <span className="relative inline-flex items-center justify-center w-3.5 h-3.5">
+            <Music className={`w-3.5 h-3.5 ${!isMusicEnabled ? 'opacity-75' : ''}`} />
+            {!isMusicEnabled && (
+              <span className="absolute w-4 h-[1.5px] bg-[#9a3425] rotate-45 rounded-full" />
+            )}
+          </span>
+          <span className="hidden md:inline">Musik</span>
+        </button>
+      </div>
     </div>
   );
 };
+

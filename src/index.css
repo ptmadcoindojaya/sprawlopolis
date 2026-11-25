@@ -300,3 +300,59 @@
 .html-window-shimmer {
   animation: windowShimmer 3.2s ease-in-out infinite;
 }
+
+/* Tactile Card Landing Spring Settle & Soft Warm Dust Puff Burst */
+@keyframes tileLandSettle {
+  0% {
+    transform: translateY(-7px) scale(1.06);
+  }
+  52% {
+    transform: translateY(1.5px) scale(0.965);
+  }
+  78% {
+    transform: translateY(-1px) scale(1.015);
+  }
+  100% {
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes dustPuffOut {
+  0% {
+    transform: translate(-50%, -50%) translate(0px, 0px) scale(0.42);
+    opacity: 0.85;
+  }
+  30% {
+    opacity: 0.72;
+  }
+  100% {
+    transform: translate(-50%, -50%) translate(var(--dust-dx, 0px), var(--dust-dy, 0px)) scale(1.48);
+    opacity: 0;
+  }
+}
+
+@keyframes dustRingOut {
+  0% {
+    transform: scale(0.94);
+    opacity: 0.55;
+  }
+  100% {
+    transform: scale(1.13);
+    opacity: 0;
+  }
+}
+
+.tile-land-settle {
+  animation: tileLandSettle 360ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  will-change: transform;
+}
+
+.dust-puff-particle {
+  animation: dustPuffOut 560ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: transform, opacity;
+}
+
+.dust-ring-aura {
+  animation: dustRingOut 520ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: transform, opacity;
+}

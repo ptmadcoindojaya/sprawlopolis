@@ -33,6 +33,21 @@ import {
   getOrCreateClientId,
   generateRoomCode
 } from './utils/multiplayerSync';
+import {
+  playCardSelect,
+  playCardRotate,
+  playCardPlace,
+  playScoreUp,
+  playGameWin,
+  playGameLose,
+  isSoundMuted,
+  toggleSoundMuted
+} from './utils/soundEffects';
+import {
+  ambientMusic,
+  isAmbientMusicEnabled,
+  toggleAmbientMusic
+} from './utils/ambientMusic';
 
 export function App() {
   const [activeCardsDeck, setActiveCardsDeck] = useState<SprawlopolisCard[]>(INITIAL_CARDS);
@@ -51,6 +66,8 @@ export function App() {
   const [isLobbyOpen, setIsLobbyOpen] = useState<boolean>(true);
   const [isCardGalleryOpen, setIsCardGalleryOpen] = useState<boolean>(false);
   const [lobbyActionNotice, setLobbyActionNotice] = useState<string | null>(null);
+  const [isMuted, setIsMuted] = useState<boolean>(() => isSoundMuted());
+  const [isMusicEnabled, setIsMusicEnabled] = useState<boolean>(() => isAmbientMusicEnabled());
 
   // Stable client ID & initial room code
   const initialClientId = useMemo(() => getOrCreateClientId(), []);
@@ -61,6 +78,11 @@ export function App() {
   // Track previous game started state to handle lobby auto-open/close transitions
   const prevGameStartedRef = useRef<boolean>(false);
   const noticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Track score, move count, and GameOver transition for one-shot audio cues
+  const prevScoreRef = useRef<number | null>(null);
+  const prevHistoryLenRef = useRef<number>(0);
+  const prevGameOverOpenRef = useRef<boolean>(false);
+  const scoreSoundTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Client-Side Solo & PeerJS P2P Multiplayer State
   const [multiplayerState, setMultiplayerState] = useState<MultiplayerState>({
@@ -218,6 +240,10 @@ export function App() {
         if (room.gameState && room.gameState.timestamp) {
           if (room.gameState.timestamp > lastGameSyncTimestampRef.current) {
             lastGameSyncTimestampRef.current = room.gameState.timestamp;
+            // Play soft wood thud when a remote PeerJS player lands a new card
+            if (room.gameState.history.length > prevHistoryLenRef.current) {
+              playCardPlace();
+            }
             setGoals(room.gameState.goals);
             setHand(room.gameState.hand);
             setGrid(room.gameState.grid);
@@ -265,9 +291,67 @@ export function App() {
     return calculateTotalScore(goals, grid);
   }, [goals, grid]);
 
+  // Start cozy generative music & ambience gently after first player click/interaction
+  useEffect(() => {
+    ambientMusic.attachAutoStart();
+    return () => {
+      ambientMusic.dispose();
+    };
+  }, []);
+
+  // Play soft ascending chime when score rises after placing a card (skip on final card so win/lose jingle shines)
+  useEffect(() => {
+    const currScore = scoreBreakdown.totalScore;
+    const currHistoryLen = history.length;
+
+    if (
+      prevScoreRef.current !== null &&
+      currHistoryLen > prevHistoryLenRef.current &&
+      currScore > prevScoreRef.current &&
+      hand.length > 0
+    ) {
+      if (scoreSoundTimerRef.current) clearTimeout(scoreSoundTimerRef.current);
+      scoreSoundTimerRef.current = setTimeout(() => {
+        playScoreUp(false);
+      }, 170);
+    }
+
+    prevScoreRef.current = currScore;
+    prevHistoryLenRef.current = currHistoryLen;
+  }, [scoreBreakdown.totalScore, history.length, hand.length]);
+
+  // Play win arpeggio or warm lose electric piano phrase exactly once when Game Over appears
+  useEffect(() => {
+    const wasGameOver = prevGameOverOpenRef.current;
+    prevGameOverOpenRef.current = isGameOverOpen;
+
+    if (!wasGameOver && isGameOverOpen) {
+      if (scoreBreakdown.isVictory) {
+        playGameWin();
+      } else {
+        playGameLose();
+      }
+    }
+  }, [isGameOverOpen, scoreBreakdown.isVictory]);
+
+  useEffect(() => {
+    return () => {
+      if (scoreSoundTimerRef.current) clearTimeout(scoreSoundTimerRef.current);
+    };
+  }, []);
+
+  const handleToggleMute = () => {
+    setIsMuted(toggleSoundMuted());
+  };
+
+  const handleToggleMusic = () => {
+    setIsMusicEnabled(toggleAmbientMusic());
+  };
+
   // Handle card rotation in hand
   const handleRotateCard = (handIdx: number) => {
     if (!isMyTurn) return;
+    playCardRotate();
     setHand((prevHand) => {
       const nextHand = [...prevHand];
       const currRot = nextHand[handIdx].rotation;
@@ -283,6 +367,8 @@ export function App() {
   const handlePlaceCard = (pos: GridPos, rotation: 0 | 180) => {
     if (!isMyTurn) return;
     if (selectedHandIndex === null || !hand[selectedHandIndex]) return;
+
+    playCardPlace();
 
     const cardToPlace = hand[selectedHandIndex];
     const orientedBlocks = getOrientedBlocks(cardToPlace.card.blocks, rotation);
@@ -448,6 +534,10 @@ export function App() {
       <TopNavHeader
         multiplayerState={multiplayerState}
         historyLength={history.length}
+        isMuted={isMuted}
+        onToggleMute={handleToggleMute}
+        isMusicEnabled={isMusicEnabled}
+        onToggleMusic={handleToggleMusic}
         onOpenLobby={handleReturnToLobby}
         onOpenRules={() => setIsRulebookOpen(true)}
         onOpenXls={() => setIsXlsOpen(true)}
@@ -483,7 +573,10 @@ export function App() {
         deckCount={deck.length}
         selectedIndex={selectedHandIndex}
         onSelectCard={(idx) => {
-          if (isMyTurn) setSelectedHandIndex(idx);
+          if (isMyTurn) {
+            if (idx !== selectedHandIndex) playCardSelect();
+            setSelectedHandIndex(idx);
+          }
         }}
         onRotateCard={handleRotateCard}
         isMyTurn={isMyTurn}

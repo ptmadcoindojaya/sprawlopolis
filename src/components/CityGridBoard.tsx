@@ -7,6 +7,43 @@ import { CityTrafficOverlay } from './CityTrafficOverlay';
 import { EmptyCellTerrain } from './EmptyCellTerrain';
 import { Check, X } from 'lucide-react';
 
+interface PlacementBurst {
+  id: number;
+  x: number;
+  y: number;
+  keys: Set<string>;
+}
+
+const DUST_PUFFS: Array<{
+  leftPct: number;
+  topPct: number;
+  dx: number;
+  dy: number;
+  size: number;
+  delayMs: number;
+  color: string;
+}> = [
+  // Top edge puffs
+  { leftPct: 18, topPct: 1, dx: -10, dy: -18, size: 17, delayMs: 0, color: '#fffdf9' },
+  { leftPct: 48, topPct: 0, dx: 2, dy: -22, size: 20, delayMs: 25, color: '#f7f0e2' },
+  { leftPct: 80, topPct: 2, dx: 11, dy: -17, size: 16, delayMs: 15, color: '#fffdf9' },
+  // Right edge puffs
+  { leftPct: 99, topPct: 22, dx: 19, dy: -9, size: 18, delayMs: 10, color: '#f4ebda' },
+  { leftPct: 100, topPct: 54, dx: 22, dy: 3, size: 19, delayMs: 30, color: '#fffdf9' },
+  { leftPct: 98, topPct: 84, dx: 16, dy: 12, size: 15, delayMs: 20, color: '#efe4cf' },
+  // Bottom edge puffs
+  { leftPct: 78, topPct: 99, dx: 9, dy: 19, size: 18, delayMs: 5, color: '#f7f0e2' },
+  { leftPct: 50, topPct: 100, dx: -3, dy: 22, size: 21, delayMs: 25, color: '#fffdf9' },
+  { leftPct: 20, topPct: 98, dx: -12, dy: 17, size: 16, delayMs: 15, color: '#f4ebda' },
+  // Left edge puffs
+  { leftPct: 1, topPct: 78, dx: -19, dy: 10, size: 17, delayMs: 20, color: '#fffdf9' },
+  { leftPct: 0, topPct: 48, dx: -22, dy: -2, size: 20, delayMs: 10, color: '#f7f0e2' },
+  { leftPct: 2, topPct: 18, dx: -16, dy: -12, size: 15, delayMs: 35, color: '#efe4cf' },
+  // Corner micro wisps
+  { leftPct: 96, topPct: 6, dx: 18, dy: -16, size: 13, delayMs: 40, color: '#fffdf9' },
+  { leftPct: 4, topPct: 95, dx: -17, dy: 16, size: 13, delayMs: 40, color: '#fffdf9' }
+];
+
 interface CityGridBoardProps {
   grid: GridState;
   selectedCard: CardInHand | null;
@@ -27,8 +64,12 @@ export const CityGridBoard: React.FC<CityGridBoardProps> = ({
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [dragStart, setDragStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [hoverPos, setHoverPos] = useState<GridPos | null>(null);
+  const [placementBursts, setPlacementBursts] = useState<PlacementBurst[]>([]);
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const prevGridRef = useRef<GridState>(grid);
+  const burstIdRef = useRef<number>(0);
+  const burstTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const touchStartRef = useRef<{
     dist: number;
     midX: number;
@@ -37,6 +78,65 @@ export const CityGridBoard: React.FC<CityGridBoardProps> = ({
     startPanX: number;
     startPanY: number;
   } | null>(null);
+
+  // Detect newly landed 2x2 cards (local or remote PeerJS) to trigger dust puff & settle spring
+  useEffect(() => {
+    const prevGrid = prevGridRef.current;
+    const prevKeys = Object.keys(prevGrid);
+    const currKeys = Object.keys(grid);
+
+    if (prevKeys.length >= 4 && currKeys.length >= prevKeys.length) {
+      const changedKeys: string[] = [];
+      for (const k of currKeys) {
+        const currBlock = grid[k];
+        const prevBlock = prevGrid[k];
+        if (
+          !prevBlock ||
+          prevBlock.cardId !== currBlock.cardId ||
+          prevBlock.layer !== currBlock.layer
+        ) {
+          changedKeys.push(k);
+        }
+      }
+
+      if (changedKeys.length === 4) {
+        const firstCardId = grid[changedKeys[0]].cardId;
+        const allSameCard = changedKeys.every((k) => grid[k].cardId === firstCardId);
+        if (allSameCard) {
+          let minPx = Infinity;
+          let minPy = Infinity;
+          changedKeys.forEach((k) => {
+            const [cx, cy] = k.split(',').map(Number);
+            if (cx < minPx) minPx = cx;
+            if (cy < minPy) minPy = cy;
+          });
+
+          const id = ++burstIdRef.current;
+          const newBurst: PlacementBurst = {
+            id,
+            x: minPx,
+            y: minPy,
+            keys: new Set(changedKeys)
+          };
+
+          setPlacementBursts((prev) => [...prev, newBurst]);
+          const timer = setTimeout(() => {
+            setPlacementBursts((prev) => prev.filter((b) => b.id !== id));
+          }, 600);
+          burstTimersRef.current.push(timer);
+        }
+      }
+    }
+
+    prevGridRef.current = grid;
+  }, [grid]);
+
+  useEffect(() => {
+    return () => {
+      burstTimersRef.current.forEach((t) => clearTimeout(t));
+      burstTimersRef.current = [];
+    };
+  }, []);
 
   // Calculate existing grid bounds to establish placement canvas limits
   const keys = Object.keys(grid);
@@ -281,7 +381,11 @@ export const CityGridBoard: React.FC<CityGridBoardProps> = ({
 
                       {/* Render Placed City Block */}
                       {placedBlock && (
-                        <BlockCell block={placedBlock} size={CELL_SIZE} />
+                        <BlockCell
+                          block={placedBlock}
+                          size={CELL_SIZE}
+                          isSettling={placementBursts.some((b) => b.keys.has(key))}
+                        />
                       )}
 
                       {/* Render Floating 2.5D Hover Preview Overlay */}
@@ -347,6 +451,45 @@ export const CityGridBoard: React.FC<CityGridBoardProps> = ({
             maxY={renderMaxY}
             className="z-[12]"
           />
+
+          {/* Soft Warm Cream Dust Puff Overlay Around Newly Landed 2x2 Card (Auto-cleaned after 600ms) */}
+          {placementBursts.map((burst) => (
+            <div
+              key={burst.id}
+              className="absolute pointer-events-none overflow-visible z-[25]"
+              style={{
+                left: (burst.x - renderMinX) * CELL_SIZE,
+                top: (burst.y - renderMinY) * CELL_SIZE,
+                width: CELL_SIZE * 2,
+                height: CELL_SIZE * 2
+              }}
+              aria-hidden="true"
+            >
+              {/* Soft expanding warm edge ring */}
+              <div className="absolute inset-0 rounded-2xl border-2 border-[#fffdf9]/80 dust-ring-aura" />
+
+              {/* Warm radial cream/ivory dust puffs */}
+              {DUST_PUFFS.map((puff, pIdx) => (
+                <div
+                  key={pIdx}
+                  className="absolute rounded-full dust-puff-particle"
+                  style={
+                    {
+                      left: `${puff.leftPct}%`,
+                      top: `${puff.topPct}%`,
+                      width: `${puff.size}px`,
+                      height: `${puff.size}px`,
+                      backgroundColor: puff.color,
+                      boxShadow: '0 2px 6px rgba(168, 152, 126, 0.25)',
+                      animationDelay: `${puff.delayMs}ms`,
+                      '--dust-dx': `${puff.dx}px`,
+                      '--dust-dy': `${puff.dy}px`
+                    } as React.CSSProperties
+                  }
+                />
+              ))}
+            </div>
+          ))}
         </div>
       </div>
     </div>
@@ -358,9 +501,10 @@ interface BlockCellProps {
   size: number;
   isGhost?: boolean;
   isValidGhost?: boolean;
+  isSettling?: boolean;
 }
 
-const BlockCell: React.FC<BlockCellProps> = ({ block, size, isGhost, isValidGhost }) => {
+const BlockCell: React.FC<BlockCellProps> = ({ block, size, isGhost, isValidGhost, isSettling }) => {
   const zoneInfo = ZONE_NAMES[block.zone];
   const isStacked = !isGhost && block.layer > 0;
   const canonicalBlockIndex = block.rotation === 180 ? 3 - block.blockIndex : block.blockIndex;
@@ -368,7 +512,9 @@ const BlockCell: React.FC<BlockCellProps> = ({ block, size, isGhost, isValidGhos
   return (
     <div
       style={{ width: size, height: size }}
-      className="relative p-[2px] flex items-center justify-center pointer-events-none overflow-visible"
+      className={`relative p-[2px] flex items-center justify-center pointer-events-none overflow-visible ${
+        isSettling ? 'tile-land-settle' : ''
+      }`}
     >
       {/* Clipped 2.5D Ground Tile, Roads & Base Diorama Layer (z-[5] below traffic z-[12]) */}
       <div

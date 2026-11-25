@@ -1,0 +1,6 @@
+{
+  "name": "Sprawlopolis Game",
+  "description": "Interactive Sprawlopolis micro card game with 18 double-sided cards, grid placement, overlapping mechanics, automated scoring, and XLS rule file import.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

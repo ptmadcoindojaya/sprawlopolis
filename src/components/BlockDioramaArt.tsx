@@ -1,0 +1,1105 @@
+import React from 'react';
+import { ZoneType, RoadEdges } from '../types';
+
+interface BlockDioramaArtProps {
+  cardId: number;
+  blockIndex: number;
+  zone: ZoneType;
+  roads: RoadEdges;
+  layer: 'base' | 'popout';
+  sizeMode?: 'board' | 'mini' | 'gallery';
+}
+
+/**
+ * Deterministic integer hash from (cardId, blockIndex, zone)
+ * Ensures every card & block always renders the exact same handcrafted miniature diorama.
+ */
+function computeBlockSeed(cardId: number, blockIndex: number, zone: ZoneType): number {
+  const zCode = zone.charCodeAt(0);
+  let h =
+    Math.imul(cardId + 17, 2654435761) ^
+    Math.imul(blockIndex + 3, 1597334677) ^
+    Math.imul(zCode, 3812015801);
+  h = Math.imul(h ^ (h >>> 16), 2246822507);
+  h = Math.imul(h ^ (h >>> 13), 3266489909);
+  return (h ^ (h >>> 16)) >>> 0;
+}
+
+/**
+ * Static SVG Trunk & Ground Shadow for Trees (paired with animated HTML canopy overlay)
+ */
+const StaticTreeBase: React.FC<{ x: number; y: number; scale?: number }> = ({
+  x,
+  y,
+  scale = 1
+}) => (
+  <g transform={`translate(${x}, ${y}) scale(${scale})`}>
+    <ellipse cx="2" cy="3" rx="8.5" ry="4" fill="#292524" opacity="0.16" />
+    <rect x="-1.8" y="-5" width="3.6" height="7.5" rx="1" fill="#7c563b" />
+  </g>
+);
+
+/**
+ * Animated HTML Tree Canopy Layer (CSS rotate with transform-origin: bottom center)
+ */
+const AnimatedTreeCanopy: React.FC<{
+  x: number;
+  y: number;
+  scale?: number;
+  variant?: 'pine' | 'round' | 'blossom';
+  delay: string;
+  duration: string;
+}> = ({ x, y, scale = 1, variant = 'round', delay, duration }) => {
+  // Canopy sits directly atop the trunk at (x%, y%) inside the 100x100 square coordinate frame
+  const widthPct = 22 * scale;
+  const heightPct = (variant === 'pine' ? 25 : 22) * scale;
+  const anchorBottomPct = 100 - (y - 3 * scale);
+
+  return (
+    <div
+      className="absolute pointer-events-none"
+      style={{
+        left: `${x}%`,
+        bottom: `${anchorBottomPct}%`,
+        width: `${widthPct}%`,
+        height: `${heightPct}%`,
+        transform: 'translateX(-50%)'
+      }}
+    >
+      <div
+        className="w-full h-full html-tree-sway"
+        style={{ animationDelay: delay, animationDuration: duration }}
+      >
+        <svg viewBox="-11 -26 22 25" className="w-full h-full overflow-visible" aria-hidden="true">
+          {variant === 'pine' ? (
+            <>
+              <polygon points="-9,-2 0,-15 9,-2" fill="#4f895c" />
+              <polygon points="-7.5,-8 0,-20 7.5,-8" fill="#63a170" />
+              <polygon points="-5.2,-14 0,-25 5.2,-14" fill="#79b985" />
+              <polygon points="-5.2,-14 0,-25 0,-14" fill="#a2d9ab" opacity="0.5" />
+            </>
+          ) : variant === 'blossom' ? (
+            <>
+              <circle cx="-4.5" cy="-8.5" r="6.5" fill="#e8949a" />
+              <circle cx="4.5" cy="-8" r="6" fill="#df7f88" />
+              <circle cx="0" cy="-14" r="7.4" fill="#f7b7bc" />
+              <circle cx="-2.2" cy="-16" r="3" fill="#fde3e5" opacity="0.72" />
+            </>
+          ) : (
+            <>
+              <circle cx="-4.5" cy="-8.5" r="6.5" fill="#549161" />
+              <circle cx="4.5" cy="-8" r="6" fill="#467d53" />
+              <circle cx="0" cy="-14" r="7.5" fill="#6fb07c" />
+              <circle cx="-2.4" cy="-16.2" r="3.2" fill="#a8ddb1" opacity="0.62" />
+            </>
+          )}
+        </svg>
+      </div>
+    </div>
+  );
+};
+
+/**
+ * Static SVG Flower Base Bush
+ */
+const StaticFlowerBase: React.FC<{ x: number; y: number }> = ({ x, y }) => (
+  <ellipse cx={x} cy={y + 2} rx="6.5" ry="3.2" fill="#5a9465" />
+);
+
+/**
+ * Animated HTML Flower Blooms Layer
+ */
+const AnimatedFlowerBlooms: React.FC<{
+  x: number;
+  y: number;
+  delay: string;
+  duration: string;
+}> = ({ x, y, delay, duration }) => (
+  <div
+    className="absolute pointer-events-none"
+    style={{
+      left: `${x}%`,
+      bottom: `${100 - (y + 2)}%`,
+      width: '13%',
+      height: '10%',
+      transform: 'translateX(-50%)'
+    }}
+  >
+    <div
+      className="w-full h-full html-flower-sway"
+      style={{ animationDelay: delay, animationDuration: duration }}
+    >
+      <svg viewBox="-6.5 -5 13 8" className="w-full h-full overflow-visible" aria-hidden="true">
+        <circle cx="-3.2" cy="-0.6" r="1.7" fill="#fdf6e3" />
+        <circle cx="0.5" cy="-2.1" r="1.8" fill="#f7b3a0" />
+        <circle cx="3.6" cy="-0.4" r="1.6" fill="#fde08d" />
+        <circle cx="-0.5" cy="0.6" r="1.4" fill="#f6c7d0" />
+      </svg>
+    </div>
+  </div>
+);
+
+/**
+ * Static SVG Streetlamp Pole & Cap
+ */
+const StaticLampPole: React.FC<{ x: number; y: number; scale?: number }> = ({
+  x,
+  y,
+  scale = 1
+}) => (
+  <g transform={`translate(${x}, ${y}) scale(${scale})`}>
+    <ellipse cx="0.8" cy="1.2" rx="3" ry="1.4" fill="#292524" opacity="0.16" />
+    <rect x="-0.9" y="-12" width="1.8" height="13" rx="0.6" fill="#555e66" />
+    <circle cx="0" cy="-13" r="2.1" fill="#fff7db" />
+    <polygon points="-2.5,-14.6 0,-16.5 2.5,-14.6" fill="#464f57" />
+  </g>
+);
+
+/**
+ * Animated HTML Streetlamp Warm Halo Glow
+ */
+const AnimatedLampGlow: React.FC<{
+  x: number;
+  y: number;
+  scale?: number;
+  delay: string;
+}> = ({ x, y, scale = 1, delay }) => {
+  const glowY = y - 13 * scale;
+  const sizePct = 13 * scale;
+  return (
+    <div
+      className="absolute rounded-full pointer-events-none html-lamp-pulse"
+      style={{
+        left: `${x}%`,
+        top: `${glowY}%`,
+        width: `${sizePct}%`,
+        height: `${sizePct}%`,
+        background: 'radial-gradient(circle, rgba(255,244,189,0.92) 0%, rgba(255,226,140,0.45) 55%, rgba(255,226,140,0) 100%)',
+        animationDelay: delay
+      }}
+    />
+  );
+};
+
+/**
+ * Animated HTML Chimney / Factory Smoke Puff
+ */
+const AnimatedSmokePuff: React.FC<{
+  x: number;
+  y: number;
+  sizePct: number;
+  delay: string;
+  duration?: string;
+}> = ({ x, y, sizePct, delay, duration = '3.1s' }) => (
+  <div
+    className="absolute rounded-full pointer-events-none html-smoke-rise"
+    style={{
+      left: `${x}%`,
+      top: `${y}%`,
+      width: `${sizePct}%`,
+      height: `${sizePct}%`,
+      backgroundColor: '#fffdf9',
+      boxShadow: '0 1px 2px rgba(41,37,36,0.12)',
+      animationDelay: delay,
+      animationDuration: duration
+    }}
+  />
+);
+
+/**
+ * Animated HTML Pond Duck
+ */
+const AnimatedPondDuck: React.FC<{ x: number; y: number; delay: string }> = ({ x, y, delay }) => (
+  <div
+    className="absolute pointer-events-none html-duck-bob"
+    style={{
+      left: `${x}%`,
+      top: `${y}%`,
+      width: '13%',
+      height: '10%',
+      animationDelay: delay
+    }}
+  >
+    <svg viewBox="-5 -4 12 8" className="w-full h-full overflow-visible" aria-hidden="true">
+      <ellipse cx="0" cy="2.1" rx="3.8" ry="1.4" fill="#639db8" opacity="0.45" />
+      <ellipse cx="0" cy="0.8" rx="3.4" ry="2.1" fill="#f9d876" />
+      <circle cx="2.5" cy="-1.2" r="1.7" fill="#fbe294" />
+      <polygon points="4,-1.2 5.7,-0.7 4,-0.2" fill="#e07b42" />
+    </svg>
+  </div>
+);
+
+/**
+ * Animated HTML Water Ripple Ring
+ */
+const AnimatedWaterRipple: React.FC<{
+  x: number;
+  y: number;
+  widthPct: number;
+  heightPct: number;
+  delay: string;
+}> = ({ x, y, widthPct, heightPct, delay }) => (
+  <div
+    className="absolute rounded-full pointer-events-none html-water-ripple"
+    style={{
+      left: `${x}%`,
+      top: `${y}%`,
+      width: `${widthPct}%`,
+      height: `${heightPct}%`,
+      border: '1.5px solid rgba(238, 249, 255, 0.92)',
+      animationDelay: delay
+    }}
+  />
+);
+
+/**
+ * Animated HTML Rooftop Cafe Signboard
+ */
+const AnimatedCafeSign: React.FC<{
+  x: number;
+  y: number;
+  scale?: number;
+  awningColor: string;
+  delay: string;
+}> = ({ x, y, scale = 1, awningColor, delay }) => (
+  <div
+    className="absolute pointer-events-none"
+    style={{
+      left: `${x}%`,
+      bottom: `${100 - y}%`,
+      width: `${17 * scale}%`,
+      height: `${12 * scale}%`,
+      transform: 'translateX(-50%)'
+    }}
+  >
+    <div
+      className="w-full h-full html-sign-sway"
+      style={{ animationDelay: delay }}
+    >
+      <svg viewBox="-8 -11 16 11" className="w-full h-full overflow-visible" aria-hidden="true">
+        <line x1="-4" y1="0" x2="-4" y2="-4.5" stroke="#536878" strokeWidth="1.2" />
+        <line x1="4" y1="0" x2="4" y2="-4.5" stroke="#536878" strokeWidth="1.2" />
+        <rect x="-7" y="-9.5" width="14" height="5.8" rx="1.4" fill={awningColor} stroke="#fffdf9" strokeWidth="0.8" />
+        <line x1="-4" y1="-6.6" x2="4" y2="-6.6" stroke="#fffdf9" strokeWidth="1.2" strokeLinecap="round" />
+      </svg>
+    </div>
+  </div>
+);
+
+/**
+ * Miniature 2.5D Wooden Park Bench (Static SVG)
+ */
+const MiniBench: React.FC<{ x: number; y: number; scale?: number }> = ({ x, y, scale = 1 }) => (
+  <g transform={`translate(${x}, ${y}) scale(${scale})`}>
+    <ellipse cx="0.5" cy="3.5" rx="8.5" ry="2.6" fill="#292524" opacity="0.14" />
+    <rect x="-6.5" y="0" width="1.6" height="3.2" fill="#52463d" />
+    <rect x="4.9" y="0" width="1.6" height="3.2" fill="#52463d" />
+    <rect x="-8" y="-1.5" width="16" height="2.4" rx="0.8" fill="#b77f52" />
+    <rect x="-7.6" y="-4.8" width="15.2" height="2.2" rx="0.8" fill="#cb9466" />
+    <line x1="-7" y1="-4.2" x2="7" y2="-4.2" stroke="#ebd0b3" strokeWidth="0.6" opacity="0.7" />
+  </g>
+);
+
+/**
+ * Miniature 2.5D Cozy Cottage / House (Static SVG body + chimney)
+ */
+const MiniHouseStatic: React.FC<{
+  x: number;
+  y: number;
+  scale?: number;
+  roofColor: string;
+  roofShade: string;
+  wallColor?: string;
+  tall?: boolean;
+  hasChimney?: boolean;
+}> = ({
+  x,
+  y,
+  scale = 1,
+  roofColor,
+  roofShade,
+  wallColor = '#fbf6ec',
+  tall = false,
+  hasChimney = false
+}) => {
+  const h = tall ? 18 : 12;
+  const roofTop = -h - 9;
+  return (
+    <g transform={`translate(${x}, ${y}) scale(${scale})`}>
+      <polygon points="-10,1 12,1 16,5 -6,5" fill="#292524" opacity="0.16" />
+      <rect x="-10" y={-h} width="14" height={h + 1} rx="1" fill={wallColor} />
+      {tall ? (
+        <polygon points="4,1 11,-2 11,-19.5 4,-18" fill="#e2d5bf" />
+      ) : (
+        <polygon points="4,1 11,-2 11,-13.5 4,-12" fill="#e2d5bf" />
+      )}
+      <rect x="-5.5" y="-5.5" width="4" height="6.5" rx="0.8" fill="#9c6244" />
+      <rect x="-8.4" y={-h + 3} width="3.2" height="3.2" rx="0.5" fill="#ffe6a3" />
+      <rect x="-1.2" y={-h + 3} width="3.2" height="3.2" rx="0.5" fill="#ffe6a3" />
+      {tall && (
+        <>
+          <rect x="-8.4" y={-h + 8.2} width="3.2" height="3" rx="0.5" fill="#9cc6de" />
+          <rect x="-1.2" y={-h + 8.2} width="3.2" height="3" rx="0.5" fill="#ffe6a3" />
+        </>
+      )}
+      <rect x="6.5" y={-h + 3.5} width="2.5" height="3" rx="0.4" fill="#c9ba9e" />
+      {hasChimney && (
+        <rect x="2.5" y={roofTop - 2} width="3.2" height="6.5" rx="0.5" fill="#a85a46" />
+      )}
+      <polygon points={`-11.5,${-h + 0.5} -3,${roofTop} 5.5,${-h + 0.5}`} fill={roofColor} />
+      <polygon points={`-3,${roofTop} 5,${roofTop - 2.2} 12.2,${-h - 1.8} 5.5,${-h + 0.5}`} fill={roofShade} />
+      <line x1="-11" y1={-h + 0.2} x2="-3" y2={roofTop + 0.4} stroke="#fffdf9" strokeWidth="0.9" opacity="0.55" />
+    </g>
+  );
+};
+
+/**
+ * Miniature 2.5D Commercial Shop / Cafe (Static SVG body + awning)
+ */
+const MiniShopStatic: React.FC<{
+  x: number;
+  y: number;
+  scale?: number;
+  awningA: string;
+  awningB?: string;
+  wallColor?: string;
+  tall?: boolean;
+}> = ({
+  x,
+  y,
+  scale = 1,
+  awningA,
+  awningB = '#fffaf0',
+  wallColor = '#faf4e8',
+  tall = false
+}) => {
+  const h = tall ? 20 : 15;
+  return (
+    <g transform={`translate(${x}, ${y}) scale(${scale})`}>
+      <polygon points="-11,1 12,1 16,5 -7,5" fill="#292524" opacity="0.16" />
+      <rect x="-11" y={-h} width="16" height={h + 1} rx="1.2" fill={wallColor} />
+      <polygon points={`5,1 12,-2 12,${-h - 2.5} 5,${-h}`} fill="#dce5eb" />
+      <polygon points={`-11.5,${-h} -4.5,${-h - 3} 12.5,${-h - 3} 5.5,${-h}`} fill="#d7e4ee" />
+      <polygon points={`-11.5,${-h} 5.5,${-h} 5.5,${-h + 1.6} -11.5,${-h + 1.6}`} fill="#5f8aa8" />
+      <rect x="-9" y="-7.5" width="7.2" height="6.2" rx="0.8" fill="#ffe9b3" />
+      <rect x="-0.5" y="-7" width="3.8" height="8" rx="0.6" fill="#4f6d82" />
+      {tall && (
+        <>
+          <rect x="-8.5" y={-h + 3.5} width="3.6" height="3.8" rx="0.6" fill="#89bddb" />
+          <rect x="-2.5" y={-h + 3.5} width="3.6" height="3.8" rx="0.6" fill="#ffe9b3" />
+        </>
+      )}
+      <polygon points="-11.5,-7.5 6,-7.5 4.8,-11.2 -10.3,-11.2" fill={awningA} />
+      <polygon points="-8.2,-7.5 -5.4,-7.5 -5,-11.2 -7.6,-11.2" fill={awningB} />
+      <polygon points="-2.4,-7.5 0.4,-7.5 0.2,-11.2 -2.2,-11.2" fill={awningB} />
+      <polygon points="3.2,-7.5 5.4,-7.5 4.6,-11.2 2.8,-11.2" fill={awningB} />
+    </g>
+  );
+};
+
+/**
+ * Miniature 2.5D Industrial Workshop / Factory / Silos / Warehouse (Static SVG)
+ */
+const MiniFactoryStatic: React.FC<{
+  x: number;
+  y: number;
+  scale?: number;
+  variant: 'sawtooth' | 'silos' | 'warehouse';
+}> = ({ x, y, scale = 1, variant }) => {
+  if (variant === 'silos') {
+    return (
+      <g transform={`translate(${x}, ${y}) scale(${scale})`}>
+        <ellipse cx="0" cy="2" rx="12" ry="4" fill="#292524" opacity="0.16" />
+        <rect x="-10" y="-17" width="9" height="17" fill="#c7beae" />
+        <rect x="-10" y="-17" width="3.5" height="17" fill="#dfd7c8" />
+        <ellipse cx="-5.5" cy="-17" rx="4.5" ry="2.2" fill="#ebe4d7" />
+        <ellipse cx="-5.5" cy="0" rx="4.5" ry="2" fill="#b5ab99" />
+        <rect x="-10" y="-10" width="9" height="2" fill="#9c7a56" opacity="0.7" />
+        <rect x="0" y="-21" width="10" height="22" fill="#b9afa0" />
+        <rect x="0" y="-21" width="4" height="22" fill="#d9d1c2" />
+        <ellipse cx="5" cy="-21" rx="5" ry="2.4" fill="#ebe4d7" />
+        <ellipse cx="5" cy="1" rx="5" ry="2.1" fill="#a89e8e" />
+        <rect x="0" y="-13" width="10" height="2.2" fill="#c97b5d" opacity="0.85" />
+        <path d="M-4,-15 L3,-18" stroke="#646e78" strokeWidth="1.6" strokeLinecap="round" />
+      </g>
+    );
+  }
+
+  if (variant === 'warehouse') {
+    return (
+      <g transform={`translate(${x}, ${y}) scale(${scale})`}>
+        <polygon points="-12,1 12,1 16,5 -8,5" fill="#292524" opacity="0.16" />
+        <rect x="-12" y="-13" width="17" height="14" rx="1" fill="#ebe2d2" />
+        <polygon points="5,1 12,-2.2 12,-15.2 5,-13" fill="#cfc3ad" />
+        <polygon points="-12.5,-13 -5.5,-16.5 12.5,-16.5 5.5,-13" fill="#8b7d6b" />
+        <rect x="-9" y="-7.5" width="8" height="8.5" rx="0.6" fill="#6d767f" />
+        <line x1="-8.5" y1="-5.2" x2="-1.5" y2="-5.2" stroke="#9aa3ac" strokeWidth="0.7" />
+        <line x1="-8.5" y1="-3" x2="-1.5" y2="-3" stroke="#9aa3ac" strokeWidth="0.7" />
+        <g transform="translate(5, -16)">
+          <line x1="-2.2" y1="0" x2="-1.5" y2="-6" stroke="#646e78" strokeWidth="1.1" />
+          <line x1="2.2" y1="0" x2="1.5" y2="-6" stroke="#646e78" strokeWidth="1.1" />
+          <rect x="-3.8" y="-11.5" width="7.6" height="5.8" rx="1" fill="#b4835a" />
+          <polygon points="-4.5,-11.5 0,-14.5 4.5,-11.5" fill="#7c5b40" />
+        </g>
+      </g>
+    );
+  }
+
+  return (
+    <g transform={`translate(${x}, ${y}) scale(${scale})`}>
+      <polygon points="-12,1 12,1 16,5 -8,5" fill="#292524" opacity="0.16" />
+      <g transform="translate(5.5, -13)">
+        <rect x="-2.4" y="-13" width="4.8" height="14" rx="0.8" fill="#a86452" />
+        <rect x="-2.4" y="-13" width="2" height="14" fill="#c27a66" />
+        <rect x="-3" y="-14" width="6" height="2" rx="0.5" fill="#646e78" />
+      </g>
+      <polygon points="-12,1 -12,-11 -5,-16 -5,-11 2,-16 2,-11 5,-11 5,1" fill="#e8dcc8" />
+      <polygon points="5,1 11,-2 11,-13.5 5,-11" fill="#cbbca2" />
+      <polygon points="-12,-11 -5,-16 0,-18 -7,-13" fill="#77828d" />
+      <polygon points="-5,-11 2,-16 7,-18 0,-13" fill="#646e78" />
+      <rect x="-9.5" y="-6.5" width="3.8" height="3.2" rx="0.5" fill="#ffe6a3" />
+      <rect x="-3.5" y="-6.5" width="3.8" height="3.2" rx="0.5" fill="#ffe6a3" />
+    </g>
+  );
+};
+
+/**
+ * Miniature Stacked Cargo Crates (Static SVG)
+ */
+const MiniCrates: React.FC<{ x: number; y: number; accent: string }> = ({ x, y, accent }) => (
+  <g transform={`translate(${x}, ${y})`}>
+    <ellipse cx="0.5" cy="2.5" rx="7.5" ry="2.6" fill="#292524" opacity="0.15" />
+    <rect x="-6.5" y="-4.5" width="6" height="6" rx="0.6" fill="#c5945c" />
+    <line x1="-6.5" y1="-4.5" x2="-0.5" y2="1.5" stroke="#9b6e3c" strokeWidth="0.7" />
+    <rect x="0.5" y="-4" width="6" height="5.5" rx="0.6" fill={accent} />
+    <polygon points="0.5,-4 3,-5.6 9,-5.6 6.5,-4" fill="#fffdf9" opacity="0.35" />
+    <rect x="-3.5" y="-9.5" width="5.5" height="5" rx="0.6" fill="#d4a66e" />
+  </g>
+);
+
+export const BlockDioramaArt: React.FC<BlockDioramaArtProps> = ({
+  cardId,
+  blockIndex,
+  zone,
+  roads,
+  layer,
+  sizeMode = 'board'
+}) => {
+  const seed = computeBlockSeed(cardId, blockIndex, zone);
+  const variant = seed % 4;
+  const accentIdx = (seed >>> 3) % 3;
+  const flip = ((seed >>> 6) % 2) === 1;
+
+  // Deterministic per-block timings so each block's ornaments sway/bob/rise out of phase
+  const delay1 = `${-((seed % 32) * 0.11).toFixed(2)}s`;
+  const delay2 = `${-(((seed + 15) % 32) * 0.11).toFixed(2)}s`;
+  const delay3 = `${-(((seed + 23) % 32) * 0.11).toFixed(2)}s`;
+  const treeDur1 = `${(2.8 + (seed % 11) * 0.11).toFixed(2)}s`;
+  const treeDur2 = `${(3.0 + ((seed >>> 4) % 10) * 0.11).toFixed(2)}s`;
+  const flowerDur = `${(2.4 + ((seed >>> 7) % 8) * 0.1).toFixed(2)}s`;
+
+  const hasRoads = !!(roads.top || roads.right || roads.bottom || roads.left);
+  const isMini = sizeMode === 'mini';
+
+  const getZoneAnchors = () => {
+    if (!hasRoads) {
+      return { heroX: flip ? 66 : 34, heroY: 46, secX: flip ? 28 : 70, secY: 76, propX: 24, propY: 78 };
+    }
+    if (roads.top && roads.bottom && !roads.left && !roads.right) {
+      return flip
+        ? { heroX: 20, heroY: 26, secX: 80, secY: 66, propX: 20, propY: 76 }
+        : { heroX: 78, heroY: 28, secX: 20, secY: 68, propX: 78, propY: 76 };
+    }
+    if (roads.left && roads.right && !roads.top && !roads.bottom) {
+      return flip
+        ? { heroX: 30, heroY: 24, secX: 68, secY: 86, propX: 26, propY: 84 }
+        : { heroX: 66, heroY: 24, secX: 30, secY: 86, propX: 72, propY: 84 };
+    }
+    if (roads.top && roads.left) {
+      return { heroX: 76, heroY: 26, secX: 76, secY: 78, propX: 22, propY: 80 };
+    }
+    if (roads.top && roads.right) {
+      return { heroX: 22, heroY: 26, secX: 24, secY: 78, propX: 76, propY: 80 };
+    }
+    if (roads.bottom && roads.left) {
+      return { heroX: 52, heroY: 23, secX: 78, secY: 76, propX: 22, propY: 26 };
+    }
+    if (roads.bottom && roads.right) {
+      return { heroX: 48, heroY: 23, secX: 22, secY: 76, propX: 78, propY: 26 };
+    }
+    return { heroX: 24, heroY: 26, secX: 74, secY: 80, propX: 24, propY: 78 };
+  };
+
+  const anchors = getZoneAnchors();
+
+  const houseRoofs = [
+    { main: '#c85a44', shade: '#9e4130' },
+    { main: '#c98042', shade: '#9d5f2b' },
+    { main: '#8a5a68', shade: '#68404d' }
+  ];
+  const shopAwnings = ['#d96b57', '#5e9a6b', '#d99b43'];
+  const cargoColors = ['#6996a8', '#c9785d', '#6d9b77'];
+
+  // Centered 1:1 coordinate frame matching SVG viewBox="0 0 100 100" across square & 4:3 cells
+  const htmlOverlayBoxClass =
+    'absolute top-0 bottom-0 left-1/2 -translate-x-1/2 aspect-square pointer-events-none overflow-visible';
+
+  // =========================================================================
+  // LAYER 1: BASE TILE (Static Ground/Buildings/Roads + Animated Base HTML Ornaments)
+  // =========================================================================
+  if (layer === 'base') {
+    return (
+      <div className="absolute inset-0 w-full h-full pointer-events-none">
+        {/* Static SVG: Ground, Ponds, Static Buildings, Trunks & Asphalt Roads */}
+        <svg
+          viewBox="0 0 100 100"
+          className="absolute inset-0 w-full h-full pointer-events-none z-0"
+          aria-hidden="true"
+        >
+          <circle cx="24" cy="24" r="34" fill="#fffdf9" opacity="0.14" />
+
+          {/* PARK STATIC BASE */}
+          {zone === 'P' && (
+            <g>
+              {variant === 0 && (
+                <>
+                  <path
+                    d="M-2,74 Q30,66 44,82 T102,76"
+                    fill="none"
+                    stroke="#e8dec6"
+                    strokeWidth="7.5"
+                    strokeLinecap="round"
+                  />
+                  <ellipse cx="58" cy="54" rx="23" ry="15" fill="#7dbad4" />
+                  <ellipse cx="57" cy="53" rx="19.5" ry="12" fill="#9ed5eb" />
+                  <MiniBench x={25} y={76} scale={0.92} />
+                  <StaticFlowerBase x={78} y={76} />
+                  <StaticTreeBase x={22} y={50} scale={0.92} />
+                </>
+              )}
+
+              {variant === 1 && (
+                <>
+                  <g fill="#ece3cd" opacity="0.9">
+                    <ellipse cx="18" cy="84" rx="4.5" ry="2.8" />
+                    <ellipse cx="32" cy="77" rx="4.2" ry="2.6" />
+                    <ellipse cx="47" cy="71" rx="4.8" ry="2.9" />
+                    <ellipse cx="62" cy="74" rx="4.2" ry="2.5" />
+                    <ellipse cx="78" cy="68" rx="4.5" ry="2.7" />
+                  </g>
+                  <MiniBench x={50} y={56} scale={1.0} />
+                  <StaticFlowerBase x={25} y={62} />
+                  <StaticFlowerBase x={77} y={82} />
+                  <StaticTreeBase x={75} y={52} scale={0.95} />
+                  <StaticTreeBase x={24} y={84} scale={0.78} />
+                </>
+              )}
+
+              {variant === 2 && (
+                <>
+                  <circle cx="50" cy="56" r="24" fill="#eae0c9" opacity="0.88" />
+                  <circle cx="50" cy="56" r="13.5" fill="#d2c6ae" />
+                  <circle cx="50" cy="56" r="10.5" fill="#8bc6df" />
+                  <circle cx="50" cy="56" r="2.6" fill="#f7f1e3" />
+                  <MiniBench x={50} y={84} scale={0.95} />
+                  <StaticFlowerBase x={21} y={76} />
+                  <StaticTreeBase x={80} y={72} scale={0.85} />
+                </>
+              )}
+
+              {variant === 3 && (
+                <>
+                  <path
+                    d="M12,98 Q42,64 88,36"
+                    fill="none"
+                    stroke="#e9dfc7"
+                    strokeWidth="7"
+                    strokeLinecap="round"
+                  />
+                  <MiniBench x={32} y={58} scale={0.95} />
+                  <StaticTreeBase x={25} y={78} scale={0.86} />
+                  <StaticTreeBase x={76} y={72} scale={0.92} />
+                  <StaticFlowerBase x={55} y={82} />
+                  <StaticFlowerBase x={72} y={44} />
+                </>
+              )}
+            </g>
+          )}
+
+          {/* RESIDENTIAL STATIC BASE */}
+          {zone === 'R' && (
+            <g>
+              {variant === 0 && (
+                <>
+                  <g transform={`translate(${anchors.propX - 10}, ${anchors.propY + 2})`} opacity="0.9">
+                    <line x1="0" y1="0" x2="18" y2="0" stroke="#fbf8f2" strokeWidth="1.4" />
+                    <line x1="0" y1="3" x2="18" y2="3" stroke="#fbf8f2" strokeWidth="1.4" />
+                    {[1, 5, 9, 13, 17].map((fx) => (
+                      <rect key={fx} x={fx} y="-2.5" width="1.6" height="7" rx="0.5" fill="#fffdf9" />
+                    ))}
+                  </g>
+                  <MiniHouseStatic
+                    x={anchors.secX}
+                    y={anchors.secY}
+                    scale={0.84}
+                    roofColor={houseRoofs[(accentIdx + 1) % 3].main}
+                    roofShade={houseRoofs[(accentIdx + 1) % 3].shade}
+                  />
+                  <StaticLampPole x={anchors.propX + 10} y={anchors.propY + 3} scale={0.82} />
+                </>
+              )}
+
+              {variant === 1 && (
+                <>
+                  <StaticTreeBase x={anchors.propX} y={anchors.propY + 2} scale={0.72} />
+                  <MiniHouseStatic
+                    x={anchors.secX}
+                    y={anchors.secY}
+                    scale={0.82}
+                    roofColor={houseRoofs[accentIdx].main}
+                    roofShade={houseRoofs[accentIdx].shade}
+                  />
+                  <StaticFlowerBase x={anchors.propX + 11} y={anchors.propY + 4} />
+                </>
+              )}
+
+              {variant === 2 && (
+                <>
+                  <MiniHouseStatic
+                    x={anchors.secX}
+                    y={anchors.secY}
+                    scale={0.88}
+                    roofColor={houseRoofs[(accentIdx + 2) % 3].main}
+                    roofShade={houseRoofs[(accentIdx + 2) % 3].shade}
+                    hasChimney
+                  />
+                  <StaticTreeBase x={anchors.propX} y={anchors.propY} scale={0.74} />
+                </>
+              )}
+
+              {variant === 3 && (
+                <>
+                  <ellipse cx={anchors.secX} cy={anchors.secY + 2} rx="14" ry="6" fill="#e9cfb8" opacity="0.65" />
+                  <MiniHouseStatic
+                    x={anchors.secX}
+                    y={anchors.secY}
+                    scale={0.86}
+                    roofColor={houseRoofs[accentIdx].main}
+                    roofShade={houseRoofs[accentIdx].shade}
+                  />
+                  <StaticLampPole x={anchors.propX - 2} y={anchors.propY + 3} scale={0.85} />
+                  <StaticFlowerBase x={anchors.propX + 8} y={anchors.propY + 3} />
+                </>
+              )}
+            </g>
+          )}
+
+          {/* COMMERCIAL STATIC BASE */}
+          {zone === 'C' && (
+            <g>
+              <rect
+                x={anchors.secX - 15}
+                y={anchors.secY - 12}
+                width="30"
+                height="18"
+                rx="4"
+                fill="#d6e7f2"
+                opacity="0.55"
+              />
+              {variant === 0 && (
+                <>
+                  <MiniShopStatic
+                    x={anchors.secX}
+                    y={anchors.secY}
+                    scale={0.84}
+                    awningA={shopAwnings[(accentIdx + 1) % 3]}
+                  />
+                  <g transform={`translate(${anchors.propX}, ${anchors.propY + 2})`}>
+                    <ellipse cx="1" cy="2" rx="5.5" ry="2.2" fill="#292524" opacity="0.16" />
+                    <line x1="0" y1="1" x2="0" y2="-6" stroke="#6d5843" strokeWidth="1.2" />
+                    <ellipse cx="0" cy="-6.5" rx="6" ry="3.2" fill={shopAwnings[accentIdx]} />
+                    <ellipse cx="-1.5" cy="-7" rx="2.4" ry="1.2" fill="#fffdf9" opacity="0.45" />
+                  </g>
+                  <StaticLampPole x={anchors.propX + 11} y={anchors.propY + 3} scale={0.8} />
+                </>
+              )}
+
+              {variant === 1 && (
+                <>
+                  <MiniShopStatic
+                    x={anchors.secX}
+                    y={anchors.secY}
+                    scale={0.84}
+                    awningA={shopAwnings[accentIdx]}
+                  />
+                  <StaticTreeBase x={anchors.propX} y={anchors.propY + 2} scale={0.68} />
+                  <StaticLampPole x={anchors.propX + 10} y={anchors.propY + 2} scale={0.8} />
+                </>
+              )}
+
+              {variant === 2 && (
+                <>
+                  <MiniShopStatic
+                    x={anchors.secX}
+                    y={anchors.secY}
+                    scale={0.86}
+                    awningA={shopAwnings[(accentIdx + 2) % 3]}
+                  />
+                  <g transform={`translate(${anchors.propX}, ${anchors.propY + 1})`}>
+                    <rect x="-7" y="-2" width="4.5" height="3.5" rx="0.8" fill="#c87355" />
+                    <circle cx="-4.8" cy="-3.6" r="2.8" fill="#63a170" />
+                    <rect x="2" y="-2" width="4.5" height="3.5" rx="0.8" fill="#c87355" />
+                    <circle cx="4.2" cy="-3.6" r="2.8" fill="#74b482" />
+                  </g>
+                </>
+              )}
+
+              {variant === 3 && (
+                <>
+                  <MiniShopStatic
+                    x={anchors.secX}
+                    y={anchors.secY}
+                    scale={0.84}
+                    awningA={shopAwnings[accentIdx]}
+                    tall
+                  />
+                  <MiniBench x={anchors.propX + 2} y={anchors.propY + 2} scale={0.82} />
+                </>
+              )}
+            </g>
+          )}
+
+          {/* INDUSTRIAL STATIC BASE */}
+          {zone === 'I' && (
+            <g>
+              <rect
+                x={anchors.secX - 14}
+                y={anchors.secY - 10}
+                width="28"
+                height="16"
+                rx="3"
+                fill="#c5b495"
+                opacity="0.65"
+              />
+              {variant === 0 && (
+                <>
+                  <MiniCrates x={anchors.secX} y={anchors.secY + 1} accent={cargoColors[accentIdx]} />
+                  <g transform={`translate(${anchors.propX}, ${anchors.propY + 2})`}>
+                    <rect x="-0.9" y="-14" width="1.8" height="15" fill="#6d6459" />
+                    <line x1="-5" y1="-11.5" x2="5" y2="-11.5" stroke="#6d6459" strokeWidth="1.4" />
+                  </g>
+                  <MiniCrates x={anchors.propX + 10} y={anchors.propY + 3} accent={cargoColors[(accentIdx + 1) % 3]} />
+                </>
+              )}
+
+              {variant === 1 && (
+                <>
+                  <MiniFactoryStatic x={anchors.secX} y={anchors.secY + 1} scale={0.78} variant="warehouse" />
+                  <MiniCrates x={anchors.propX + 2} y={anchors.propY + 2} accent={cargoColors[accentIdx]} />
+                </>
+              )}
+
+              {variant === 2 && (
+                <>
+                  <MiniFactoryStatic x={anchors.secX} y={anchors.secY + 1} scale={0.82} variant="silos" />
+                  <StaticLampPole x={anchors.propX} y={anchors.propY + 3} scale={0.82} />
+                </>
+              )}
+
+              {variant === 3 && (
+                <>
+                  <MiniCrates x={anchors.secX - 3} y={anchors.secY + 2} accent={cargoColors[(accentIdx + 2) % 3]} />
+                  <g transform={`translate(${anchors.propX - 8}, ${anchors.propY + 1})`} opacity="0.8">
+                    <line x1="0" y1="0" x2="18" y2="0" stroke="#78716c" strokeWidth="1.2" />
+                    <line x1="0" y1="3.5" x2="18" y2="3.5" stroke="#78716c" strokeWidth="1.2" />
+                    {[1, 6, 11, 16].map((fx) => (
+                      <line key={fx} x1={fx} y1="-2" x2={fx} y2="5" stroke="#646e78" strokeWidth="1.3" />
+                    ))}
+                  </g>
+                </>
+              )}
+            </g>
+          )}
+        </svg>
+
+        {/* Animated HTML Base Ornaments (Trees, Flowers, Duck, Ripples, Lamps, Secondary Chimney Smoke) */}
+        <div className={`${htmlOverlayBoxClass} z-[1]`}>
+          {zone === 'P' && variant === 0 && (
+            <>
+              <AnimatedWaterRipple x={56} y={54} widthPct={23} heightPct={13} delay={delay1} />
+              <AnimatedPondDuck x={58} y={53} delay={delay2} />
+              <AnimatedFlowerBlooms x={78} y={76} delay={delay1} duration={flowerDur} />
+              <AnimatedTreeCanopy x={22} y={50} scale={0.92} variant="round" delay={delay2} duration={treeDur2} />
+            </>
+          )}
+          {zone === 'P' && variant === 1 && (
+            <>
+              <AnimatedFlowerBlooms x={25} y={62} delay={delay1} duration={flowerDur} />
+              <AnimatedFlowerBlooms x={77} y={82} delay={delay2} duration={flowerDur} />
+              <AnimatedTreeCanopy x={75} y={52} scale={0.95} variant="pine" delay={delay1} duration={treeDur1} />
+              <AnimatedTreeCanopy x={24} y={84} scale={0.78} variant="blossom" delay={delay3} duration={treeDur2} />
+            </>
+          )}
+          {zone === 'P' && variant === 2 && (
+            <>
+              <AnimatedWaterRipple x={50} y={56} widthPct={15} heightPct={15} delay={delay1} />
+              <AnimatedFlowerBlooms x={21} y={76} delay={delay2} duration={flowerDur} />
+              <AnimatedTreeCanopy x={80} y={72} scale={0.85} variant="round" delay={delay1} duration={treeDur1} />
+            </>
+          )}
+          {zone === 'P' && variant === 3 && (
+            <>
+              <AnimatedTreeCanopy x={25} y={78} scale={0.86} variant="blossom" delay={delay1} duration={treeDur1} />
+              <AnimatedTreeCanopy x={76} y={72} scale={0.92} variant="pine" delay={delay2} duration={treeDur2} />
+              <AnimatedFlowerBlooms x={55} y={82} delay={delay1} duration={flowerDur} />
+              <AnimatedFlowerBlooms x={72} y={44} delay={delay3} duration={flowerDur} />
+            </>
+          )}
+
+          {zone === 'R' && variant === 0 && (
+            <AnimatedLampGlow x={anchors.propX + 10} y={anchors.propY + 3} scale={0.82} delay={delay1} />
+          )}
+          {zone === 'R' && variant === 1 && (
+            <>
+              <AnimatedTreeCanopy x={anchors.propX} y={anchors.propY + 2} scale={0.72} variant="round" delay={delay1} duration={treeDur1} />
+              <AnimatedFlowerBlooms x={anchors.propX + 11} y={anchors.propY + 4} delay={delay2} duration={flowerDur} />
+            </>
+          )}
+          {zone === 'R' && variant === 2 && (
+            <>
+              <AnimatedSmokePuff
+                x={anchors.secX + 4.1 * 0.88}
+                y={anchors.secY - 25.2 * 0.88}
+                sizePct={5.2}
+                delay={delay1}
+              />
+              <AnimatedTreeCanopy x={anchors.propX} y={anchors.propY} scale={0.74} variant="blossom" delay={delay2} duration={treeDur2} />
+            </>
+          )}
+          {zone === 'R' && variant === 3 && (
+            <>
+              <AnimatedLampGlow x={anchors.propX - 2} y={anchors.propY + 3} scale={0.85} delay={delay2} />
+              <AnimatedFlowerBlooms x={anchors.propX + 8} y={anchors.propY + 3} delay={delay1} duration={flowerDur} />
+            </>
+          )}
+
+          {zone === 'C' && variant === 0 && (
+            <AnimatedLampGlow x={anchors.propX + 11} y={anchors.propY + 3} scale={0.8} delay={delay2} />
+          )}
+          {zone === 'C' && variant === 1 && (
+            <>
+              <AnimatedTreeCanopy x={anchors.propX} y={anchors.propY + 2} scale={0.68} variant="round" delay={delay1} duration={treeDur1} />
+              <AnimatedLampGlow x={anchors.propX + 10} y={anchors.propY + 2} scale={0.8} delay={delay3} />
+            </>
+          )}
+
+          {zone === 'I' && variant === 2 && (
+            <AnimatedLampGlow x={anchors.propX} y={anchors.propY + 3} scale={0.82} delay={delay2} />
+          )}
+        </div>
+
+        {/* Crisp Soft Asphalt Road Layer (Always above base ground ornaments & connected seamlessly) */}
+        {hasRoads && (
+          <svg
+            viewBox="0 0 100 100"
+            className="absolute inset-0 w-full h-full pointer-events-none z-[2]"
+            aria-hidden="true"
+          >
+            {/* Subtle Road Curb */}
+            {roads.top && (
+              <line x1="50" y1="50" x2="50" y2="0" stroke="#7d8791" strokeWidth="26" strokeLinecap="square" />
+            )}
+            {roads.right && (
+              <line x1="50" y1="50" x2={isMini ? 124 : 100} y2="50" stroke="#7d8791" strokeWidth="26" strokeLinecap="square" />
+            )}
+            {roads.bottom && (
+              <line x1="50" y1="50" x2="50" y2="100" stroke="#7d8791" strokeWidth="26" strokeLinecap="square" />
+            )}
+            {roads.left && (
+              <line x1="50" y1="50" x2={isMini ? -24 : 0} y2="50" stroke="#7d8791" strokeWidth="26" strokeLinecap="square" />
+            )}
+
+            {/* Soft Asphalt Base (#646e78) */}
+            {roads.top && (
+              <line x1="50" y1="50" x2="50" y2="0" stroke="#646e78" strokeWidth="21" strokeLinecap="square" />
+            )}
+            {roads.right && (
+              <line x1="50" y1="50" x2={isMini ? 124 : 100} y2="50" stroke="#646e78" strokeWidth="21" strokeLinecap="square" />
+            )}
+            {roads.bottom && (
+              <line x1="50" y1="50" x2="50" y2="100" stroke="#646e78" strokeWidth="21" strokeLinecap="square" />
+            )}
+            {roads.left && (
+              <line x1="50" y1="50" x2={isMini ? -24 : 0} y2="50" stroke="#646e78" strokeWidth="21" strokeLinecap="square" />
+            )}
+
+            {/* Smooth Intersection Hub */}
+            <circle cx="50" cy="50" r="10.5" fill="#646e78" />
+
+            {/* Soft Cream Center Dashes (#fdf8ee) */}
+            {roads.top && (
+              <line x1="50" y1="50" x2="50" y2="0" stroke="#fdf8ee" strokeWidth="2.8" strokeDasharray="6,5" strokeLinecap="round" />
+            )}
+            {roads.right && (
+              <line x1="50" y1="50" x2={isMini ? 124 : 100} y2="50" stroke="#fdf8ee" strokeWidth="2.8" strokeDasharray="6,5" strokeLinecap="round" />
+            )}
+            {roads.bottom && (
+              <line x1="50" y1="50" x2="50" y2="100" stroke="#fdf8ee" strokeWidth="2.8" strokeDasharray="6,5" strokeLinecap="round" />
+            )}
+            {roads.left && (
+              <line x1="50" y1="50" x2={isMini ? -24 : 0} y2="50" stroke="#fdf8ee" strokeWidth="2.8" strokeDasharray="6,5" strokeLinecap="round" />
+            )}
+          </svg>
+        )}
+      </div>
+    );
+  }
+
+  // =========================================================================
+  // LAYER 2: 2.5D POP-OUT HERO ORNAMENTS (Static Buildings/Trunks + Animated HTML Pop-Outs)
+  // =========================================================================
+  const heroScale = isMini ? 0.82 : 0.96;
+  const heroY = isMini ? Math.max(anchors.heroY, 27) : anchors.heroY;
+  const isHouseTall = variant === 1 || variant === 3;
+  const hasHouseChimney = variant === 0 || variant === 1;
+  const isShopTall = variant === 1 || variant === 2;
+  const hasShopSign = variant === 0 || variant === 1 || variant === 3;
+  const factoryVariant = variant === 1 ? 'silos' : variant === 2 ? 'warehouse' : 'sawtooth';
+
+  return (
+    <div className="absolute inset-0 w-full h-full pointer-events-none overflow-visible z-20">
+      {/* Static Pop-Out Structures & Tree Trunks */}
+      <svg
+        viewBox="0 0 100 100"
+        overflow="visible"
+        className="absolute inset-0 w-full h-full pointer-events-none"
+        aria-hidden="true"
+      >
+        {zone === 'P' && variant === 0 && (
+          <>
+            <StaticTreeBase x={28} y={isMini ? 24 : 20} scale={isMini ? 0.92 : 1.18} />
+            <StaticTreeBase x={72} y={isMini ? 26 : 23} scale={isMini ? 0.8 : 0.98} />
+          </>
+        )}
+        {zone === 'P' && variant === 1 && (
+          <>
+            <StaticTreeBase x={26} y={isMini ? 24 : 20} scale={isMini ? 0.92 : 1.18} />
+            <StaticTreeBase x={70} y={isMini ? 25 : 21} scale={isMini ? 0.84 : 1.08} />
+          </>
+        )}
+        {zone === 'P' && variant === 2 && (
+          <>
+            <StaticTreeBase x={24} y={isMini ? 24 : 20} scale={isMini ? 0.88 : 1.15} />
+            <StaticTreeBase x={75} y={isMini ? 25 : 22} scale={isMini ? 0.86 : 1.08} />
+          </>
+        )}
+        {zone === 'P' && variant === 3 && (
+          <>
+            <StaticTreeBase x={70} y={isMini ? 24 : 20} scale={isMini ? 0.92 : 1.18} />
+            <StaticTreeBase x={26} y={isMini ? 26 : 22} scale={isMini ? 0.84 : 1.05} />
+          </>
+        )}
+
+        {zone === 'R' && (
+          <MiniHouseStatic
+            x={anchors.heroX}
+            y={heroY}
+            scale={heroScale}
+            roofColor={houseRoofs[accentIdx].main}
+            roofShade={houseRoofs[accentIdx].shade}
+            tall={isHouseTall}
+            hasChimney={hasHouseChimney}
+          />
+        )}
+
+        {zone === 'C' && (
+          <MiniShopStatic
+            x={anchors.heroX}
+            y={heroY}
+            scale={heroScale}
+            awningA={shopAwnings[accentIdx]}
+            tall={isShopTall}
+          />
+        )}
+
+        {zone === 'I' && (
+          <MiniFactoryStatic
+            x={anchors.heroX}
+            y={heroY}
+            scale={heroScale}
+            variant={factoryVariant}
+          />
+        )}
+      </svg>
+
+      {/* Animated HTML Pop-Out Ornaments (Tall Swaying Trees, Rising Smoke, Rooftop Cafe Signs) */}
+      <div className={htmlOverlayBoxClass}>
+        {zone === 'P' && variant === 0 && (
+          <>
+            <AnimatedTreeCanopy x={28} y={isMini ? 24 : 20} scale={isMini ? 0.92 : 1.18} variant="pine" delay={delay1} duration={treeDur1} />
+            <AnimatedTreeCanopy x={72} y={isMini ? 26 : 23} scale={isMini ? 0.8 : 0.98} variant="round" delay={delay2} duration={treeDur2} />
+          </>
+        )}
+        {zone === 'P' && variant === 1 && (
+          <>
+            <AnimatedTreeCanopy x={26} y={isMini ? 24 : 20} scale={isMini ? 0.92 : 1.18} variant="round" delay={delay1} duration={treeDur1} />
+            <AnimatedTreeCanopy x={70} y={isMini ? 25 : 21} scale={isMini ? 0.84 : 1.08} variant="pine" delay={delay2} duration={treeDur2} />
+          </>
+        )}
+        {zone === 'P' && variant === 2 && (
+          <>
+            <AnimatedTreeCanopy x={24} y={isMini ? 24 : 20} scale={isMini ? 0.88 : 1.15} variant="pine" delay={delay1} duration={treeDur1} />
+            <AnimatedTreeCanopy x={75} y={isMini ? 25 : 22} scale={isMini ? 0.86 : 1.08} variant="blossom" delay={delay2} duration={treeDur2} />
+          </>
+        )}
+        {zone === 'P' && variant === 3 && (
+          <>
+            <AnimatedTreeCanopy x={70} y={isMini ? 24 : 20} scale={isMini ? 0.92 : 1.18} variant="blossom" delay={delay1} duration={treeDur1} />
+            <AnimatedTreeCanopy x={26} y={isMini ? 26 : 22} scale={isMini ? 0.84 : 1.05} variant="pine" delay={delay2} duration={treeDur2} />
+          </>
+        )}
+
+        {/* Residential Hero Chimney Smoke */}
+        {zone === 'R' && hasHouseChimney && (
+          <AnimatedSmokePuff
+            x={anchors.heroX + 4.1 * heroScale}
+            y={heroY - (isHouseTall ? 31.2 : 25.2) * heroScale}
+            sizePct={6 * heroScale}
+            delay={delay1}
+          />
+        )}
+
+        {/* Commercial Hero Rooftop Cafe Sign */}
+        {zone === 'C' && hasShopSign && (
+          <AnimatedCafeSign
+            x={anchors.heroX - 2 * heroScale}
+            y={heroY - ((isShopTall ? 20 : 15) + 3) * heroScale}
+            scale={heroScale}
+            awningColor={shopAwnings[accentIdx]}
+            delay={delay1}
+          />
+        )}
+
+        {/* Industrial Hero Smokestack Dual Steam Puffs */}
+        {zone === 'I' && factoryVariant === 'sawtooth' && (
+          <>
+            <AnimatedSmokePuff
+              x={anchors.heroX + 5.5 * heroScale}
+              y={heroY - 28.5 * heroScale}
+              sizePct={7.2 * heroScale}
+              delay={delay1}
+              duration="3.1s"
+            />
+            <AnimatedSmokePuff
+              x={anchors.heroX + 6.9 * heroScale}
+              y={heroY - 29.5 * heroScale}
+              sizePct={5.8 * heroScale}
+              delay={delay2}
+              duration="3.1s"
+            />
+          </>
+        )}
+      </div>
+    </div>
+  );
+};

@@ -1,0 +1,302 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
+  --font-display: "Outfit", "Plus Jakarta Sans", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+@layer base {
+  body {
+    background-color: #f4efe6;
+    color: #292524;
+    font-family: var(--font-sans);
+  }
+
+  h1, h2, h3, h4 {
+    font-family: var(--font-display);
+  }
+}
+
+/* Cozy 2.5D Tabletop Surface & Tactile Diorama Utilities */
+.tabletop-surface {
+  background-color: #efe9dc;
+  background-image:
+    radial-gradient(circle at 50% 42%, rgba(251, 248, 242, 0.85) 0%, rgba(239, 233, 220, 0.55) 58%, rgba(224, 214, 196, 0.85) 100%),
+    radial-gradient(rgba(120, 113, 108, 0.14) 1px, transparent 1px);
+  background-size: 100% 100%, 24px 24px;
+}
+
+/* 2.5D Tactile Diorama City Tile (Top bright highlight + thick bottom bevel lip + soft tabletop shadow) */
+.tile-25d {
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.6),
+    inset 1px 0 0 rgba(255, 255, 255, 0.28),
+    inset -1px 0 0 rgba(41, 37, 36, 0.08),
+    inset 0 -4px 0 rgba(41, 37, 36, 0.16),
+    0 4px 8px rgba(41, 37, 36, 0.15),
+    0 1px 2px rgba(41, 37, 36, 0.12);
+}
+
+/* Stacked overlapping tile with slightly deeper physical elevation */
+.tile-25d-elevated {
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.68),
+    inset 1px 0 0 rgba(255, 255, 255, 0.32),
+    inset -1px 0 0 rgba(41, 37, 36, 0.09),
+    inset 0 -5px 0 rgba(41, 37, 36, 0.2),
+    0 7px 14px rgba(41, 37, 36, 0.2),
+    0 2px 4px rgba(41, 37, 36, 0.14);
+}
+
+/* Mini tile inside cards in hand & gallery */
+.tile-25d-mini {
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.6),
+    inset 0 -3px 0 rgba(41, 37, 36, 0.16),
+    0 2px 4px rgba(41, 37, 36, 0.12);
+}
+
+/* Floating hover preview tile */
+.tile-25d-floating {
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.72),
+    inset 0 -4px 0 rgba(41, 37, 36, 0.18),
+    0 14px 24px rgba(41, 37, 36, 0.24),
+    0 4px 8px rgba(41, 37, 36, 0.14);
+}
+
+/* Thick tabletop cardstock panel */
+.cozy-panel {
+  background-color: rgba(251, 248, 242, 0.96);
+  border: 1px solid #ddd4c3;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 10px 28px rgba(41, 37, 36, 0.1),
+    0 2px 6px rgba(41, 37, 36, 0.06);
+}
+
+/* Tactile cardboard card in hand */
+.cozy-card {
+  background-color: #fbf8f2;
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.95),
+    inset 0 -3px 0 rgba(168, 155, 134, 0.28),
+    0 4px 10px rgba(41, 37, 36, 0.09);
+}
+
+.cozy-card-selected {
+  background-color: #fffdf9;
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 1),
+    inset 0 -4px 0 rgba(217, 119, 87, 0.35),
+    0 14px 24px rgba(217, 119, 87, 0.2),
+    0 4px 10px rgba(41, 37, 36, 0.12);
+}
+
+/* Tactile 2.5D Tabletop Goal / Mission Cardstock */
+.goal-card-25d {
+  background-color: #fdfaf3;
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.96),
+    inset 0 -3px 0 rgba(168, 155, 134, 0.34),
+    0 4px 10px rgba(41, 37, 36, 0.1),
+    0 1px 2px rgba(41, 37, 36, 0.08);
+}
+
+/* Tactile button with gentle tabletop depth */
+.cozy-btn-primary {
+  background-color: #d97757;
+  color: #fffdf9;
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.32),
+    inset 0 -3px 0 rgba(124, 45, 24, 0.25),
+    0 3px 8px rgba(180, 83, 52, 0.25);
+}
+
+.cozy-btn-primary:hover {
+  background-color: #cc6949;
+}
+
+.cozy-btn-sage {
+  background-color: #5f9b6f;
+  color: #fffdf9;
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.32),
+    inset 0 -3px 0 rgba(35, 76, 48, 0.25),
+    0 3px 8px rgba(72, 128, 88, 0.25);
+}
+
+.cozy-btn-sage:hover {
+  background-color: #528b61;
+}
+
+/* Soft Warm Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(221, 212, 195, 0.35);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(168, 155, 134, 0.65);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(120, 113, 108, 0.75);
+}
+
+@keyframes fadeInSoft {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-fade-in {
+  animation: fadeInSoft 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Pure HTML 2.5D Cozy Diorama Animations (GPU-accelerated, never blocked in SVG) */
+@keyframes treeSway {
+  0%, 100% {
+    transform: rotate(-7.5deg);
+  }
+  50% {
+    transform: rotate(7.5deg);
+  }
+}
+
+@keyframes flowerSway {
+  0%, 100% {
+    transform: rotate(-7deg);
+  }
+  50% {
+    transform: rotate(7deg);
+  }
+}
+
+@keyframes signSway {
+  0%, 100% {
+    transform: rotate(-5.5deg);
+  }
+  50% {
+    transform: rotate(5.5deg);
+  }
+}
+
+@keyframes duckBob {
+  0%, 100% {
+    transform: translate(-50%, -50%) translate(-3.5px, -0.5px) rotate(-6deg);
+  }
+  33% {
+    transform: translate(-50%, -50%) translate(0.8px, -2.5px) rotate(3deg);
+  }
+  66% {
+    transform: translate(-50%, -50%) translate(3.8px, 0.8px) rotate(6deg);
+  }
+}
+
+@keyframes waterRipple {
+  0% {
+    transform: translate(-50%, -50%) scale(0.55);
+    opacity: 0;
+  }
+  35% {
+    opacity: 0.85;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1.32);
+    opacity: 0;
+  }
+}
+
+@keyframes smokeRise {
+  0% {
+    transform: translate(-50%, 0px) scale(0.55);
+    opacity: 0;
+  }
+  20% {
+    opacity: 0.86;
+  }
+  70% {
+    opacity: 0.5;
+  }
+  100% {
+    transform: translate(calc(-50% + 5px), -15px) scale(1.55);
+    opacity: 0;
+  }
+}
+
+@keyframes lampPulse {
+  0%, 100% {
+    transform: translate(-50%, -50%) scale(0.8);
+    opacity: 0.38;
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.26);
+    opacity: 0.96;
+  }
+}
+
+@keyframes windowShimmer {
+  0%, 100% {
+    opacity: 0.62;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.html-tree-sway {
+  transform-origin: bottom center;
+  animation: treeSway 3.1s ease-in-out infinite;
+  will-change: transform;
+}
+
+.html-flower-sway {
+  transform-origin: bottom center;
+  animation: flowerSway 2.6s ease-in-out infinite;
+  will-change: transform;
+}
+
+.html-sign-sway {
+  transform-origin: bottom center;
+  animation: signSway 3.0s ease-in-out infinite;
+  will-change: transform;
+}
+
+.html-duck-bob {
+  transform-origin: center center;
+  animation: duckBob 3.5s ease-in-out infinite;
+  will-change: transform;
+}
+
+.html-water-ripple {
+  transform-origin: center center;
+  animation: waterRipple 2.9s ease-out infinite;
+  will-change: transform, opacity;
+}
+
+.html-smoke-rise {
+  transform-origin: center center;
+  animation: smokeRise 3.1s ease-out infinite;
+  will-change: transform, opacity;
+}
+
+.html-lamp-pulse {
+  transform-origin: center center;
+  animation: lampPulse 2.6s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
+.html-window-shimmer {
+  animation: windowShimmer 3.2s ease-in-out infinite;
+}

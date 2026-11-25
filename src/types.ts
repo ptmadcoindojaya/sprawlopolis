@@ -109,6 +109,20 @@ export interface ConnectedClient {
   lastSeen: number;
 }
 
+export type ConnectionStatus = 'idle' | 'connecting' | 'host-ready' | 'connected' | 'error';
+
+export type PeerRole = 'solo' | 'host' | 'guest';
+
+export interface SyncedGameState {
+  goals: GoalCard[];
+  hand: CardInHand[];
+  grid: GridState;
+  deck: SprawlopolisCard[];
+  history: MoveHistoryItem[];
+  isGameOver: boolean;
+  timestamp: number;
+}
+
 export interface MultiplayerState {
   roomCode: string;
   totalPlayers: number; // 1, 2, 3, or 4
@@ -119,6 +133,9 @@ export interface MultiplayerState {
   gameCode: string;
   connectedClients: ConnectedClient[];
   isGameActive: boolean;
+  role: PeerRole;
+  connectionStatus: ConnectionStatus;
+  connectionMessage?: string;
 }
 
 export interface CustomRulesXlsRow {

@@ -12,7 +12,8 @@ import {
   GoalCard,
   GridPos,
   MoveHistoryItem,
-  MultiplayerState
+  MultiplayerState,
+  SyncedGameState
 } from './types';
 import { calculateTotalScore } from './utils/scoring';
 import { getOrientedBlocks } from './utils/cardUtils';
@@ -30,8 +31,7 @@ import { CardGalleryModal } from './components/CardGalleryModal';
 import {
   multiplayerSync,
   getOrCreateClientId,
-  apiUpdateGameState,
-  apiResetRoom
+  generateRoomCode
 } from './utils/multiplayerSync';
 
 export function App() {
@@ -43,38 +43,44 @@ export function App() {
   const [selectedHandIndex, setSelectedHandIndex] = useState<number | null>(0);
   const [history, setHistory] = useState<MoveHistoryItem[]>([]);
 
-  // Modals state
+  // Modals state — Lobby opens immediately when app loads
   const [isScoreOpen, setIsScoreOpen] = useState<boolean>(false);
   const [isRulebookOpen, setIsRulebookOpen] = useState<boolean>(false);
   const [isXlsOpen, setIsXlsOpen] = useState<boolean>(false);
   const [isGameOverOpen, setIsGameOverOpen] = useState<boolean>(false);
   const [isLobbyOpen, setIsLobbyOpen] = useState<boolean>(true);
   const [isCardGalleryOpen, setIsCardGalleryOpen] = useState<boolean>(false);
+  const [lobbyActionNotice, setLobbyActionNotice] = useState<string | null>(null);
 
-  // Initial client ID
-  const initialClientId = getOrCreateClientId();
+  // Stable client ID & initial room code
+  const initialClientId = useMemo(() => getOrCreateClientId(), []);
+  const initialRoomCode = useMemo(() => generateRoomCode(), []);
 
-  // Last local game state update timestamp ref for server sync deduplication
+  // Last synced game state timestamp ref for deduplication
   const lastGameSyncTimestampRef = useRef<number>(0);
-  // Track previous game started state to handle lobby auto-close transitions
+  // Track previous game started state to handle lobby auto-open/close transitions
   const prevGameStartedRef = useRef<boolean>(false);
+  const noticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Multiplayer / Pass & Play state
+  // Client-Side Solo & PeerJS P2P Multiplayer State
   const [multiplayerState, setMultiplayerState] = useState<MultiplayerState>({
-    roomCode: 'SPRAWL-18',
-    gameCode: 'SPRAWL-18',
+    roomCode: initialRoomCode,
+    gameCode: initialRoomCode,
     totalPlayers: 1,
     myPlayerId: 1,
     myClientId: initialClientId,
     currentTurnIndex: 0,
     connectedClients: [],
     isGameActive: false,
+    role: 'solo',
+    connectionStatus: 'idle',
+    connectionMessage: 'Mode Solo aktif (tanpa koneksi jaringan).',
     players: [
       {
         id: 1,
         name: 'Pemain Solo',
         isMainPlayer: true,
-        color: '#f59e0b',
+        color: '#d97757',
         isReady: true,
         avatar: 'P1',
         occupantClientId: initialClientId,
@@ -93,8 +99,11 @@ export function App() {
     return arr;
   };
 
-  // Start new game setup
-  const startNewGame = (customCards?: SprawlopolisCard[], skipServerSync: boolean = false) => {
+  // Build fresh game setup & optionally broadcast via PeerJS when multiplayer
+  const startNewGame = (
+    customCards?: SprawlopolisCard[],
+    mode: 'local-only' | 'start-multiplayer' | 'reset-multiplayer' = 'reset-multiplayer'
+  ) => {
     const pool = customCards || activeCardsDeck;
     const shuffled = shuffleArray(pool);
 
@@ -134,92 +143,122 @@ export function App() {
       currentTurnIndex: 0
     }));
 
-    // Broadcast starting board & cards to Express server if multiplayer
-    if (!skipServerSync && multiplayerState.totalPlayers > 1) {
-      const payload = {
-        goals: initialGoals,
-        hand: initialHand,
-        grid: initialGrid,
-        deck: remainingDeck,
-        history: [],
-        isGameOver: false,
-        timestamp: now
-      };
-      apiUpdateGameState(multiplayerState.roomCode, payload, 0);
+    const payload: SyncedGameState = {
+      goals: initialGoals,
+      hand: initialHand,
+      grid: initialGrid,
+      deck: remainingDeck,
+      history: [],
+      isGameOver: false,
+      timestamp: now
+    };
+
+    if (mode === 'start-multiplayer' && multiplayerSync.getRole() === 'host') {
+      multiplayerSync.startGame(payload);
+    } else if (mode === 'reset-multiplayer' && multiplayerSync.getRole() !== 'solo') {
+      multiplayerSync.updateGameState(payload, 0);
     }
   };
 
+  // Render an initial cozy board behind the opening Lobby
   useEffect(() => {
-    startNewGame(undefined, true);
+    startNewGame(undefined, 'local-only');
   }, []);
 
-  // Central Real-time Server Sync Loop
+  // Subscribe to PeerJS P2P Real-Time Events (Zero HTTP polling, 100% browser-side)
   useEffect(() => {
-    const currentRoom = multiplayerState.roomCode || 'SPRAWL-18';
-    const myPlayerObj = multiplayerState.players.find((p) => p.id === multiplayerState.myPlayerId);
-    const myName = myPlayerObj ? myPlayerObj.name : `Pemain ${multiplayerState.myPlayerId}`;
-
-    multiplayerSync.startPolling(
-      currentRoom,
-      myName,
-      multiplayerState.myPlayerId,
-      (serverRoom) => {
-        // Match client slot in room
-        let serverMySlotId = multiplayerState.myPlayerId;
-        const mySlotInServer = serverRoom.players.find(
+    const unsubscribe = multiplayerSync.subscribe({
+      onConnectionChange: (ev) => {
+        setMultiplayerState((prev) => ({
+          ...prev,
+          role: ev.role,
+          connectionStatus: ev.status,
+          connectionMessage: ev.message,
+          roomCode: ev.roomCode,
+          gameCode: ev.roomCode
+        }));
+      },
+      onActionError: (msg) => {
+        setLobbyActionNotice(msg);
+        if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current);
+        noticeTimerRef.current = setTimeout(() => {
+          setLobbyActionNotice(null);
+        }, 4500);
+      },
+      onRoomUpdate: (room) => {
+        const mySlotInRoom = room.players.find(
           (p) => p.occupantClientId === initialClientId
         );
-
-        if (mySlotInServer) {
-          serverMySlotId = mySlotInServer.id;
-        }
+        const resolvedSlotId = mySlotInRoom ? mySlotInRoom.id : 0;
 
         setMultiplayerState((prev) => ({
           ...prev,
-          roomCode: serverRoom.roomCode,
-          totalPlayers: serverRoom.totalPlayers,
-          players: serverRoom.players,
-          connectedClients: serverRoom.connectedClients,
-          currentTurnIndex: serverRoom.currentTurnIndex,
-          myPlayerId: serverMySlotId,
-          isGameActive: serverRoom.isGameStarted
+          roomCode: room.roomCode,
+          gameCode: room.roomCode,
+          totalPlayers: room.totalPlayers,
+          players: room.players,
+          connectedClients: room.connectedClients,
+          currentTurnIndex: room.currentTurnIndex,
+          myPlayerId: resolvedSlotId,
+          isGameActive: room.isGameStarted
         }));
 
-        // Handle auto-closing lobby screen on game start transition
-        const gameStartedTransition = !prevGameStartedRef.current && serverRoom.isGameStarted;
-        prevGameStartedRef.current = !!serverRoom.isGameStarted;
+        const wasStarted = prevGameStartedRef.current;
+        const isNowStarted = !!room.isGameStarted;
+        prevGameStartedRef.current = isNowStarted;
 
-        if (gameStartedTransition && isLobbyOpen) {
+        if (!wasStarted && isNowStarted) {
           setIsLobbyOpen(false);
+          setIsGameOverOpen(false);
+        } else if (wasStarted && !isNowStarted) {
+          setIsGameOverOpen(false);
+          setIsLobbyOpen(true);
         }
 
-        // Live game state sync across all clients in room
-        if (serverRoom.gameState && serverRoom.gameState.timestamp) {
-          if (serverRoom.gameState.timestamp > lastGameSyncTimestampRef.current) {
-            lastGameSyncTimestampRef.current = serverRoom.gameState.timestamp;
-
-            if (serverRoom.gameState.goals) setGoals(serverRoom.gameState.goals);
-            if (serverRoom.gameState.hand) setHand(serverRoom.gameState.hand);
-            if (serverRoom.gameState.grid) setGrid(serverRoom.gameState.grid);
-            if (serverRoom.gameState.deck) setDeck(serverRoom.gameState.deck);
-            if (serverRoom.gameState.history) setHistory(serverRoom.gameState.history);
-            if (serverRoom.gameState.isGameOver !== undefined) {
-              setIsGameOverOpen(serverRoom.gameState.isGameOver);
-            }
+        if (room.gameState && room.gameState.timestamp) {
+          if (room.gameState.timestamp > lastGameSyncTimestampRef.current) {
+            lastGameSyncTimestampRef.current = room.gameState.timestamp;
+            setGoals(room.gameState.goals);
+            setHand(room.gameState.hand);
+            setGrid(room.gameState.grid);
+            setDeck(room.gameState.deck);
+            setHistory(room.gameState.history);
+            setSelectedHandIndex((prevIdx) => {
+              const len = room.gameState!.hand.length;
+              if (len === 0) return null;
+              if (prevIdx === null || prevIdx >= len) return 0;
+              return prevIdx;
+            });
+            setIsGameOverOpen(!!room.gameState.isGameOver);
           }
         }
       }
-    );
+    });
 
     return () => {
-      multiplayerSync.stopPolling();
+      unsubscribe();
+      if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current);
     };
-  }, [multiplayerState.roomCode, multiplayerState.myPlayerId, initialClientId, isLobbyOpen]);
+  }, [initialClientId]);
+
+  // Cleanly close PeerJS on page unload
+  useEffect(() => {
+    const handleUnload = () => {
+      if (multiplayerSync.getRole() !== 'solo') {
+        multiplayerSync.disconnect();
+      }
+    };
+    window.addEventListener('beforeunload', handleUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleUnload);
+    };
+  }, []);
 
   // Determine current active turn player
-  const isSolo = multiplayerState.totalPlayers === 1;
-  const currentTurnPlayer = multiplayerState.players[multiplayerState.currentTurnIndex] || multiplayerState.players[0];
-  const isMyTurn = isSolo || (multiplayerState.myPlayerId === currentTurnPlayer?.id);
+  const isSolo = multiplayerState.totalPlayers === 1 && multiplayerState.role === 'solo';
+  const currentTurnPlayer =
+    multiplayerState.players[multiplayerState.currentTurnIndex] || multiplayerState.players[0];
+  const isMyTurn = isSolo || (multiplayerState.myPlayerId > 0 && multiplayerState.myPlayerId === currentTurnPlayer?.id);
 
   // Compute live score breakdown
   const scoreBreakdown = useMemo(() => {
@@ -242,13 +281,12 @@ export function App() {
 
   // Handle placing card onto city grid
   const handlePlaceCard = (pos: GridPos, rotation: 0 | 180) => {
-    if (!isMyTurn) return; // Strictly enforce turn locking
+    if (!isMyTurn) return;
     if (selectedHandIndex === null || !hand[selectedHandIndex]) return;
 
     const cardToPlace = hand[selectedHandIndex];
     const orientedBlocks = getOrientedBlocks(cardToPlace.card.blocks, rotation);
 
-    // Save history for undo
     const newHistoryItem: MoveHistoryItem = {
       grid: { ...grid },
       hand: [...hand],
@@ -260,7 +298,6 @@ export function App() {
 
     const updatedHistory = [...history, newHistoryItem];
 
-    // Update grid state with 2x2 blocks placed at pos
     const nextGrid = { ...grid };
     const offsets = [
       { dx: 0, dy: 0, bIdx: 0 },
@@ -284,7 +321,6 @@ export function App() {
       };
     });
 
-    // Remove placed card from hand and draw a new one if deck is not empty
     const updatedHand = hand.filter((_, idx) => idx !== selectedHandIndex);
     let updatedDeck = [...deck];
 
@@ -295,7 +331,9 @@ export function App() {
     }
 
     const isGameOver = updatedHand.length === 0;
-    const nextTurnIndex = isSolo ? 0 : (multiplayerState.currentTurnIndex + 1) % multiplayerState.totalPlayers;
+    const nextTurnIndex = isSolo
+      ? 0
+      : (multiplayerState.currentTurnIndex + 1) % multiplayerState.totalPlayers;
 
     setGrid(nextGrid);
     setHand(updatedHand);
@@ -311,9 +349,8 @@ export function App() {
     const now = Date.now();
     lastGameSyncTimestampRef.current = now;
 
-    // Broadcast updated game state to server
     if (!isSolo) {
-      const payload = {
+      const payload: SyncedGameState = {
         goals,
         hand: updatedHand,
         grid: nextGrid,
@@ -322,10 +359,9 @@ export function App() {
         isGameOver,
         timestamp: now
       };
-      apiUpdateGameState(multiplayerState.roomCode, payload, nextTurnIndex);
+      multiplayerSync.updateGameState(payload, nextTurnIndex);
     }
 
-    // Check if game is over (hand is empty)
     if (isGameOver) {
       setTimeout(() => {
         setIsGameOverOpen(true);
@@ -358,7 +394,7 @@ export function App() {
     lastGameSyncTimestampRef.current = now;
 
     if (!isSolo) {
-      const payload = {
+      const payload: SyncedGameState = {
         goals,
         hand: lastState.hand,
         grid: lastState.grid,
@@ -367,7 +403,7 @@ export function App() {
         isGameOver: false,
         timestamp: now
       };
-      apiUpdateGameState(multiplayerState.roomCode, payload, nextTurnIndex);
+      multiplayerSync.updateGameState(payload, nextTurnIndex);
     }
   };
 
@@ -375,24 +411,21 @@ export function App() {
   const handleSwitchTurn = (newIndex: number) => {
     setMultiplayerState((prev) => ({ ...prev, currentTurnIndex: newIndex }));
     if (!isSolo) {
-      apiUpdateGameState(multiplayerState.roomCode, undefined, newIndex);
+      multiplayerSync.updateGameState(undefined, newIndex);
     }
   };
 
   // Reset current game
-  const handleResetGame = async () => {
-    if (!isSolo) {
-      await apiResetRoom(multiplayerState.roomCode);
-    }
-    startNewGame();
+  const handleResetGame = () => {
+    startNewGame(undefined, isSolo ? 'local-only' : 'reset-multiplayer');
   };
 
-  // Return to lobby handler (Solo & Multiplayer)
-  const handleReturnToLobby = async () => {
+  // Return to lobby handler (Solo & P2P Multiplayer)
+  const handleReturnToLobby = () => {
     setIsGameOverOpen(false);
     setIsLobbyOpen(true);
     if (!isSolo) {
-      await apiResetRoom(multiplayerState.roomCode);
+      multiplayerSync.resetRoom();
     }
     setMultiplayerState((prev) => ({
       ...prev,
@@ -403,7 +436,7 @@ export function App() {
   // Apply custom spreadsheet cards
   const handleApplyCustomCards = (customCards: SprawlopolisCard[]) => {
     setActiveCardsDeck(customCards);
-    startNewGame(customCards);
+    startNewGame(customCards, isSolo ? 'local-only' : 'reset-multiplayer');
   };
 
   const selectedCardInHand = selectedHandIndex !== null ? hand[selectedHandIndex] : null;
@@ -489,10 +522,12 @@ export function App() {
       <LobbyScreen
         isOpen={isLobbyOpen}
         multiplayerState={multiplayerState}
+        actionNotice={lobbyActionNotice}
+        onClearActionNotice={() => setLobbyActionNotice(null)}
         onUpdateMultiplayerState={(partial) => setMultiplayerState((prev) => ({ ...prev, ...partial }))}
         onStartGame={() => {
           setIsLobbyOpen(false);
-          startNewGame();
+          startNewGame(undefined, isSolo ? 'local-only' : 'start-multiplayer');
         }}
         onClose={() => setIsLobbyOpen(false)}
         onOpenRulebook={() => {

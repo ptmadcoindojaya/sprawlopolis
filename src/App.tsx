@@ -48,7 +48,7 @@ export function App() {
   const [isRulebookOpen, setIsRulebookOpen] = useState<boolean>(false);
   const [isXlsOpen, setIsXlsOpen] = useState<boolean>(false);
   const [isGameOverOpen, setIsGameOverOpen] = useState<boolean>(false);
-  const [isLobbyOpen, setIsLobbyOpen] = useState<boolean>(false);
+  const [isLobbyOpen, setIsLobbyOpen] = useState<boolean>(true);
   const [isCardGalleryOpen, setIsCardGalleryOpen] = useState<boolean>(false);
 
   // Initial client ID

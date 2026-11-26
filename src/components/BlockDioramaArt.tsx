@@ -140,7 +140,7 @@ const AnimatedFlowerBlooms: React.FC<{
 );
 
 /**
- * Static SVG Streetlamp Pole & Cap
+ * Static SVG Streetlamp / Park Lantern Pole & Cap
  */
 const StaticLampPole: React.FC<{ x: number; y: number; scale?: number }> = ({
   x,
@@ -148,15 +148,43 @@ const StaticLampPole: React.FC<{ x: number; y: number; scale?: number }> = ({
   scale = 1
 }) => (
   <g transform={`translate(${x}, ${y}) scale(${scale})`}>
-    <ellipse cx="0.8" cy="1.2" rx="3" ry="1.4" fill="#292524" opacity="0.16" />
+    <ellipse cx="0.8" cy="1.2" rx="3" ry="1.4" fill="#292524" opacity="0.18" />
     <rect x="-0.9" y="-12" width="1.8" height="13" rx="0.6" fill="#555e66" />
-    <circle cx="0" cy="-13" r="2.1" fill="#fff7db" />
+    {/* Daytime frosted glass bulb */}
+    <circle cx="0" cy="-13" r="2.1" fill="#e8e2d4" />
     <polygon points="-2.5,-14.6 0,-16.5 2.5,-14.6" fill="#464f57" />
   </g>
 );
 
 /**
- * Animated HTML Streetlamp Warm Halo Glow
+ * Emissive Warm Golden Streetlamp / Park Lantern Ground Light Pool
+ * Illuminates surrounding sidewalk, grass, and dark asphalt road at Sunset & Night
+ */
+const LampGroundPool: React.FC<{
+  x: number;
+  y: number;
+  scale?: number;
+}> = ({ x, y, scale = 1 }) => {
+  const sizePct = 54 * scale;
+  return (
+    <div
+      className="absolute rounded-full pointer-events-none"
+      style={{
+        left: `${x}%`,
+        top: `${y - 2 * scale}%`,
+        width: `${sizePct}%`,
+        height: `${sizePct}%`,
+        transform: 'translate(-50%, -50%)',
+        opacity: 'var(--city-lamp-opacity, 0)',
+        background:
+          'radial-gradient(circle, rgba(255,228,132,0.54) 0%, rgba(255,192,84,0.28) 44%, rgba(255,172,56,0.08) 72%, rgba(255,168,52,0) 100%)'
+      }}
+    />
+  );
+};
+
+/**
+ * Unclipped Emissive Streetlamp Bulb Core + Radiant Golden Bloom Halo (CSS radial-gradient + soft box-shadow)
  */
 const AnimatedLampGlow: React.FC<{
   x: number;
@@ -165,21 +193,66 @@ const AnimatedLampGlow: React.FC<{
   delay: string;
 }> = ({ x, y, scale = 1, delay }) => {
   const glowY = y - 13 * scale;
-  const sizePct = 13 * scale;
+  const haloPct = 36 * scale;
+  const corePct = 6.2 * scale;
   return (
     <div
-      className="absolute rounded-full pointer-events-none html-lamp-pulse"
+      className="absolute pointer-events-none overflow-visible"
       style={{
         left: `${x}%`,
         top: `${glowY}%`,
-        width: `${sizePct}%`,
-        height: `${sizePct}%`,
-        background: 'radial-gradient(circle, rgba(255,244,189,0.92) 0%, rgba(255,226,140,0.45) 55%, rgba(255,226,140,0) 100%)',
-        animationDelay: delay
+        width: `${haloPct}%`,
+        height: `${haloPct}%`,
+        opacity: 'var(--city-lamp-opacity, 0)'
       }}
-    />
+    >
+      {/* Wide golden-amber radial atmospheric bloom */}
+      <div
+        className="w-full h-full rounded-full html-lamp-pulse"
+        style={{
+          background:
+            'radial-gradient(circle, rgba(255,248,196,0.92) 0%, rgba(255,216,104,0.58) 32%, rgba(255,180,62,0.22) 64%, rgba(255,166,48,0) 100%)',
+          animationDelay: delay
+        }}
+      />
+      {/* Crisp luminous lantern bulb core with soft warm box-shadow bloom */}
+      <div
+        className="absolute left-0 top-0 rounded-full"
+        style={{
+          width: `${(corePct / haloPct) * 100}%`,
+          height: `${(corePct / haloPct) * 100}%`,
+          transform: 'translate(-50%, -50%)',
+          backgroundColor: '#fffbe0',
+          boxShadow:
+            '0 0 6px 2px rgba(255, 232, 134, 0.92), 0 0 14px 4px rgba(255, 192, 72, 0.52)'
+        }}
+      />
+    </div>
   );
 };
+
+/**
+ * Warm High-Contrast Emissive Window Spill Halo for Buildings at Sunset/Night
+ */
+const AnimatedWindowGlow: React.FC<{
+  x: number;
+  y: number;
+  sizePct?: number;
+}> = ({ x, y, sizePct = 28 }) => (
+  <div
+    className="absolute rounded-full pointer-events-none"
+    style={{
+      left: `${x}%`,
+      top: `${y}%`,
+      width: `${sizePct}%`,
+      height: `${sizePct}%`,
+      transform: 'translate(-50%, -50%)',
+      opacity: 'var(--city-window-glow, 0)',
+      background:
+        'radial-gradient(circle, rgba(255,238,148,0.68) 0%, rgba(255,198,84,0.34) 48%, rgba(255,172,56,0.08) 76%, rgba(255,164,48,0) 100%)'
+    }}
+  />
+);
 
 /**
  * Animated HTML Chimney / Factory Smoke Puff
@@ -334,21 +407,49 @@ const MiniHouseStatic: React.FC<{
         <polygon points="4,1 11,-2 11,-13.5 4,-12" fill="#e2d5bf" />
       )}
       <rect x="-5.5" y="-5.5" width="4" height="6.5" rx="0.8" fill="#9c6244" />
-      <rect x="-8.4" y={-h + 3} width="3.2" height="3.2" rx="0.5" fill="#ffe6a3" />
-      <rect x="-1.2" y={-h + 3} width="3.2" height="3.2" rx="0.5" fill="#ffe6a3" />
+      {/* Daytime soft sky-tinted glass windows */}
+      <rect x="-8.4" y={-h + 3} width="3.2" height="3.2" rx="0.5" fill="#8eb9d2" />
+      <rect x="-1.2" y={-h + 3} width="3.2" height="3.2" rx="0.5" fill="#8eb9d2" />
       {tall && (
         <>
-          <rect x="-8.4" y={-h + 8.2} width="3.2" height="3" rx="0.5" fill="#9cc6de" />
-          <rect x="-1.2" y={-h + 8.2} width="3.2" height="3" rx="0.5" fill="#ffe6a3" />
+          <rect x="-8.4" y={-h + 8.2} width="3.2" height="3" rx="0.5" fill="#8eb9d2" />
+          <rect x="-1.2" y={-h + 8.2} width="3.2" height="3" rx="0.5" fill="#8eb9d2" />
         </>
       )}
-      <rect x="6.5" y={-h + 3.5} width="2.5" height="3" rx="0.4" fill="#c9ba9e" />
+      <rect x="6.5" y={-h + 3.5} width="2.5" height="3" rx="0.4" fill="#a9bdca" />
       {hasChimney && (
         <rect x="2.5" y={roofTop - 2} width="3.2" height="6.5" rx="0.5" fill="#a85a46" />
       )}
       <polygon points={`-11.5,${-h + 0.5} -3,${roofTop} 5.5,${-h + 0.5}`} fill={roofColor} />
       <polygon points={`-3,${roofTop} 5,${roofTop - 2.2} 12.2,${-h - 1.8} 5.5,${-h + 0.5}`} fill={roofShade} />
       <line x1="-11" y1={-h + 0.2} x2="-3" y2={roofTop + 0.4} stroke="#fffdf9" strokeWidth="0.9" opacity="0.55" />
+    </g>
+  );
+};
+
+/**
+ * Un-dimmed Emissive Warm Lit Windows & Cozy Porch Lamp for MiniHouse at Sunset & Night
+ */
+const MiniHouseLights: React.FC<{
+  x: number;
+  y: number;
+  scale?: number;
+  tall?: boolean;
+}> = ({ x, y, scale = 1, tall = false }) => {
+  const h = tall ? 18 : 12;
+  return (
+    <g transform={`translate(${x}, ${y}) scale(${scale})`}>
+      <rect x="-8.4" y={-h + 3} width="3.2" height="3.2" rx="0.5" fill="#fff5b2" stroke="#ffbe42" strokeWidth="0.45" />
+      <rect x="-1.2" y={-h + 3} width="3.2" height="3.2" rx="0.5" fill="#fff9cc" stroke="#ffbe42" strokeWidth="0.45" />
+      {tall && (
+        <>
+          <rect x="-8.4" y={-h + 8.2} width="3.2" height="3" rx="0.5" fill="#ffe47a" stroke="#ffbe42" strokeWidth="0.4" />
+          <rect x="-1.2" y={-h + 8.2} width="3.2" height="3" rx="0.5" fill="#fff7be" stroke="#ffbe42" strokeWidth="0.4" />
+        </>
+      )}
+      <rect x="6.5" y={-h + 3.5} width="2.5" height="3" rx="0.4" fill="#ffe88a" stroke="#ffb83c" strokeWidth="0.35" />
+      {/* Warm tiny porch lantern above front door */}
+      <circle cx="-3.5" cy="-6.3" r="0.95" fill="#fffbe0" />
     </g>
   );
 };
@@ -381,18 +482,45 @@ const MiniShopStatic: React.FC<{
       <polygon points={`5,1 12,-2 12,${-h - 2.5} 5,${-h}`} fill="#dce5eb" />
       <polygon points={`-11.5,${-h} -4.5,${-h - 3} 12.5,${-h - 3} 5.5,${-h}`} fill="#d7e4ee" />
       <polygon points={`-11.5,${-h} 5.5,${-h} 5.5,${-h + 1.6} -11.5,${-h + 1.6}`} fill="#5f8aa8" />
-      <rect x="-9" y="-7.5" width="7.2" height="6.2" rx="0.8" fill="#ffe9b3" />
+      {/* Daytime storefront glass */}
+      <rect x="-9" y="-7.5" width="7.2" height="6.2" rx="0.8" fill="#9bc7e0" />
       <rect x="-0.5" y="-7" width="3.8" height="8" rx="0.6" fill="#4f6d82" />
       {tall && (
         <>
           <rect x="-8.5" y={-h + 3.5} width="3.6" height="3.8" rx="0.6" fill="#89bddb" />
-          <rect x="-2.5" y={-h + 3.5} width="3.6" height="3.8" rx="0.6" fill="#ffe9b3" />
+          <rect x="-2.5" y={-h + 3.5} width="3.6" height="3.8" rx="0.6" fill="#89bddb" />
         </>
       )}
       <polygon points="-11.5,-7.5 6,-7.5 4.8,-11.2 -10.3,-11.2" fill={awningA} />
       <polygon points="-8.2,-7.5 -5.4,-7.5 -5,-11.2 -7.6,-11.2" fill={awningB} />
       <polygon points="-2.4,-7.5 0.4,-7.5 0.2,-11.2 -2.2,-11.2" fill={awningB} />
       <polygon points="3.2,-7.5 5.4,-7.5 4.6,-11.2 2.8,-11.2" fill={awningB} />
+    </g>
+  );
+};
+
+/**
+ * Un-dimmed Emissive Warm Lit Storefront & Upstairs Windows for MiniShop at Sunset & Night
+ */
+const MiniShopLights: React.FC<{
+  x: number;
+  y: number;
+  scale?: number;
+  tall?: boolean;
+}> = ({ x, y, scale = 1, tall = false }) => {
+  const h = tall ? 20 : 15;
+  return (
+    <g transform={`translate(${x}, ${y}) scale(${scale})`}>
+      {/* Soft warm sidewalk light spill directly in front of shop display window */}
+      <polygon points="-9.6,-1.1 -1.2,-1.1 1.6,3.8 -12.2,3.8" fill="#ffd970" opacity="0.32" />
+      <rect x="-9" y="-7.5" width="7.2" height="6.2" rx="0.8" fill="#fff4ae" stroke="#ffbe42" strokeWidth="0.5" />
+      <rect x="-7.8" y="-6.4" width="4.8" height="3.2" rx="0.4" fill="#fffbe0" opacity="0.72" />
+      {tall && (
+        <>
+          <rect x="-8.5" y={-h + 3.5} width="3.6" height="3.8" rx="0.6" fill="#ffe885" stroke="#ffbe42" strokeWidth="0.45" />
+          <rect x="-2.5" y={-h + 3.5} width="3.6" height="3.8" rx="0.6" fill="#fff7be" stroke="#ffbe42" strokeWidth="0.45" />
+        </>
+      )}
     </g>
   );
 };
@@ -457,8 +585,43 @@ const MiniFactoryStatic: React.FC<{
       <polygon points="5,1 11,-2 11,-13.5 5,-11" fill="#cbbca2" />
       <polygon points="-12,-11 -5,-16 0,-18 -7,-13" fill="#77828d" />
       <polygon points="-5,-11 2,-16 7,-18 0,-13" fill="#646e78" />
-      <rect x="-9.5" y="-6.5" width="3.8" height="3.2" rx="0.5" fill="#ffe6a3" />
-      <rect x="-3.5" y="-6.5" width="3.8" height="3.2" rx="0.5" fill="#ffe6a3" />
+      {/* Daytime workshop glass */}
+      <rect x="-9.5" y="-6.5" width="3.8" height="3.2" rx="0.5" fill="#89a8ba" />
+      <rect x="-3.5" y="-6.5" width="3.8" height="3.2" rx="0.5" fill="#89a8ba" />
+    </g>
+  );
+};
+
+/**
+ * Un-dimmed Emissive Warm Workshop Windows, Loading Bay Lamp & Silo Beacon at Sunset & Night
+ */
+const MiniFactoryLights: React.FC<{
+  x: number;
+  y: number;
+  scale?: number;
+  variant: 'sawtooth' | 'silos' | 'warehouse';
+}> = ({ x, y, scale = 1, variant }) => {
+  if (variant === 'silos') {
+    return (
+      <g transform={`translate(${x}, ${y}) scale(${scale})`}>
+        <circle cx="5" cy="-21.5" r="2.8" fill="#ffcf54" opacity="0.45" />
+        <circle cx="5" cy="-21.5" r="1.5" fill="#fff6b8" />
+        <circle cx="-5.5" cy="-17.2" r="1.15" fill="#ffe680" />
+      </g>
+    );
+  }
+  if (variant === 'warehouse') {
+    return (
+      <g transform={`translate(${x}, ${y}) scale(${scale})`}>
+        <polygon points="-8.2,-9.2 -1.8,-9.2 0.2,2.2 -10.2,2.2" fill="#ffd970" opacity="0.22" />
+        <rect x="-6.8" y="-10.8" width="3.6" height="1.8" rx="0.7" fill="#fff7be" stroke="#ffbe42" strokeWidth="0.35" />
+      </g>
+    );
+  }
+  return (
+    <g transform={`translate(${x}, ${y}) scale(${scale})`}>
+      <rect x="-9.5" y="-6.5" width="3.8" height="3.2" rx="0.5" fill="#fff4ac" stroke="#ffbe42" strokeWidth="0.45" />
+      <rect x="-3.5" y="-6.5" width="3.8" height="3.2" rx="0.5" fill="#fff9cc" stroke="#ffbe42" strokeWidth="0.45" />
     </g>
   );
 };
@@ -544,419 +707,498 @@ export const BlockDioramaArt: React.FC<BlockDioramaArtProps> = ({
   const htmlOverlayBoxClass =
     'absolute top-0 bottom-0 left-1/2 -translate-x-1/2 aspect-square pointer-events-none overflow-visible';
 
+  // Single source of truth for streetlamps & cozy park lanterns so poles, ground pools & unclipped blooms align pixel-for-pixel
+  const lampPositions: Array<{ x: number; y: number; scale: number; delay: string }> = [];
+  if (zone === 'P') {
+    if (hasRoads) {
+      lampPositions.push({ x: anchors.propX, y: anchors.propY, scale: 0.78, delay: delay1 });
+    } else if (variant === 0) {
+      lampPositions.push({ x: 36, y: 75, scale: 0.78, delay: delay1 });
+    } else if (variant === 1) {
+      lampPositions.push({ x: 66, y: 57, scale: 0.78, delay: delay2 });
+    } else if (variant === 2) {
+      lampPositions.push({ x: 31, y: 56, scale: 0.78, delay: delay1 });
+    } else {
+      lampPositions.push({ x: 44, y: 58, scale: 0.78, delay: delay2 });
+    }
+  } else if (zone === 'R') {
+    if (variant === 0) {
+      lampPositions.push({ x: anchors.propX + 10, y: anchors.propY + 3, scale: 0.82, delay: delay1 });
+    } else if (variant === 1) {
+      lampPositions.push({ x: anchors.propX + 11, y: anchors.propY - 1, scale: 0.78, delay: delay2 });
+    } else if (variant === 2) {
+      lampPositions.push({ x: anchors.propX + 11, y: anchors.propY + 2, scale: 0.78, delay: delay3 });
+    } else {
+      lampPositions.push({ x: anchors.propX - 2, y: anchors.propY + 3, scale: 0.85, delay: delay2 });
+    }
+  } else if (zone === 'C') {
+    if (variant === 0) {
+      lampPositions.push({ x: anchors.propX + 11, y: anchors.propY + 3, scale: 0.82, delay: delay2 });
+    } else if (variant === 1) {
+      lampPositions.push({ x: anchors.propX + 10, y: anchors.propY + 2, scale: 0.82, delay: delay3 });
+    } else if (variant === 2) {
+      lampPositions.push({ x: anchors.propX + 11, y: anchors.propY + 2, scale: 0.8, delay: delay1 });
+    } else {
+      lampPositions.push({ x: anchors.propX - 8, y: anchors.propY + 2, scale: 0.8, delay: delay2 });
+    }
+  } else if (zone === 'I') {
+    if (variant === 0) {
+      lampPositions.push({ x: anchors.propX, y: anchors.propY + 2, scale: 0.82, delay: delay1 });
+    } else if (variant === 2) {
+      lampPositions.push({ x: anchors.propX, y: anchors.propY + 3, scale: 0.82, delay: delay2 });
+    } else if (variant === 3) {
+      lampPositions.push({ x: anchors.propX + 11, y: anchors.propY + 2, scale: 0.8, delay: delay3 });
+    }
+  }
+
   // =========================================================================
-  // LAYER 1: BASE TILE (Static Ground/Buildings/Roads + Animated Base HTML Ornaments)
+  // LAYER 1: BASE TILE (Dimmed Twilight Surfaces + Un-dimmed Emissive Lights)
   // =========================================================================
   if (layer === 'base') {
     return (
       <div className="absolute inset-0 w-full h-full pointer-events-none">
-        {/* Static SVG: Ground, Ponds, Static Buildings, Trunks & Asphalt Roads */}
-        <svg
-          viewBox="0 0 100 100"
-          className="absolute inset-0 w-full h-full pointer-events-none z-0"
-          aria-hidden="true"
-        >
-          <circle cx="24" cy="24" r="34" fill="#fffdf9" opacity="0.14" />
+        {/* Non-Emissive Base Surfaces (Saturation-preserving dimming at Night) */}
+        <div className="absolute inset-0 w-full h-full pointer-events-none city-night-surface">
+          {/* Static SVG: Ground, Ponds, Static Buildings, Trunks & Lamp Poles */}
+          <svg
+            viewBox="0 0 100 100"
+            className="absolute inset-0 w-full h-full pointer-events-none z-0"
+            aria-hidden="true"
+          >
+            <circle
+              cx="24"
+              cy="24"
+              r="34"
+              fill="#fffdf9"
+              style={{ opacity: 'var(--tile-sun-sheen, 0.13)' }}
+            />
 
-          {/* PARK STATIC BASE */}
-          {zone === 'P' && (
-            <g>
-              {variant === 0 && (
-                <>
-                  <path
-                    d="M-2,74 Q30,66 44,82 T102,76"
-                    fill="none"
-                    stroke="#e8dec6"
-                    strokeWidth="7.5"
-                    strokeLinecap="round"
-                  />
-                  <ellipse cx="58" cy="54" rx="23" ry="15" fill="#7dbad4" />
-                  <ellipse cx="57" cy="53" rx="19.5" ry="12" fill="#9ed5eb" />
-                  <MiniBench x={25} y={76} scale={0.92} />
-                  <StaticFlowerBase x={78} y={76} />
-                  <StaticTreeBase x={22} y={50} scale={0.92} />
-                </>
-              )}
+            {/* PARK STATIC BASE */}
+            {zone === 'P' && (
+              <g>
+                {variant === 0 && (
+                  <>
+                    <path
+                      d="M-2,74 Q30,66 44,82 T102,76"
+                      fill="none"
+                      stroke="#e8dec6"
+                      strokeWidth="7.5"
+                      strokeLinecap="round"
+                    />
+                    <ellipse cx="58" cy="54" rx="23" ry="15" fill="#7dbad4" />
+                    <ellipse cx="57" cy="53" rx="19.5" ry="12" fill="#9ed5eb" />
+                    <MiniBench x={25} y={76} scale={0.92} />
+                    <StaticFlowerBase x={78} y={76} />
+                    <StaticTreeBase x={22} y={50} scale={0.92} />
+                  </>
+                )}
 
-              {variant === 1 && (
-                <>
-                  <g fill="#ece3cd" opacity="0.9">
-                    <ellipse cx="18" cy="84" rx="4.5" ry="2.8" />
-                    <ellipse cx="32" cy="77" rx="4.2" ry="2.6" />
-                    <ellipse cx="47" cy="71" rx="4.8" ry="2.9" />
-                    <ellipse cx="62" cy="74" rx="4.2" ry="2.5" />
-                    <ellipse cx="78" cy="68" rx="4.5" ry="2.7" />
-                  </g>
-                  <MiniBench x={50} y={56} scale={1.0} />
-                  <StaticFlowerBase x={25} y={62} />
-                  <StaticFlowerBase x={77} y={82} />
-                  <StaticTreeBase x={75} y={52} scale={0.95} />
-                  <StaticTreeBase x={24} y={84} scale={0.78} />
-                </>
-              )}
+                {variant === 1 && (
+                  <>
+                    <g fill="#ece3cd" opacity="0.9">
+                      <ellipse cx="18" cy="84" rx="4.5" ry="2.8" />
+                      <ellipse cx="32" cy="77" rx="4.2" ry="2.6" />
+                      <ellipse cx="47" cy="71" rx="4.8" ry="2.9" />
+                      <ellipse cx="62" cy="74" rx="4.2" ry="2.5" />
+                      <ellipse cx="78" cy="68" rx="4.5" ry="2.7" />
+                    </g>
+                    <MiniBench x={50} y={56} scale={1.0} />
+                    <StaticFlowerBase x={25} y={62} />
+                    <StaticFlowerBase x={77} y={82} />
+                    <StaticTreeBase x={75} y={52} scale={0.95} />
+                    <StaticTreeBase x={24} y={84} scale={0.78} />
+                  </>
+                )}
 
-              {variant === 2 && (
-                <>
-                  <circle cx="50" cy="56" r="24" fill="#eae0c9" opacity="0.88" />
-                  <circle cx="50" cy="56" r="13.5" fill="#d2c6ae" />
-                  <circle cx="50" cy="56" r="10.5" fill="#8bc6df" />
-                  <circle cx="50" cy="56" r="2.6" fill="#f7f1e3" />
-                  <MiniBench x={50} y={84} scale={0.95} />
-                  <StaticFlowerBase x={21} y={76} />
-                  <StaticTreeBase x={80} y={72} scale={0.85} />
-                </>
-              )}
+                {variant === 2 && (
+                  <>
+                    <circle cx="50" cy="56" r="24" fill="#eae0c9" opacity="0.88" />
+                    <circle cx="50" cy="56" r="13.5" fill="#d2c6ae" />
+                    <circle cx="50" cy="56" r="10.5" fill="#8bc6df" />
+                    <circle cx="50" cy="56" r="2.6" fill="#f7f1e3" />
+                    <MiniBench x={50} y={84} scale={0.95} />
+                    <StaticFlowerBase x={21} y={76} />
+                    <StaticTreeBase x={80} y={72} scale={0.85} />
+                  </>
+                )}
 
-              {variant === 3 && (
-                <>
-                  <path
-                    d="M12,98 Q42,64 88,36"
-                    fill="none"
-                    stroke="#e9dfc7"
-                    strokeWidth="7"
-                    strokeLinecap="round"
-                  />
-                  <MiniBench x={32} y={58} scale={0.95} />
-                  <StaticTreeBase x={25} y={78} scale={0.86} />
-                  <StaticTreeBase x={76} y={72} scale={0.92} />
-                  <StaticFlowerBase x={55} y={82} />
-                  <StaticFlowerBase x={72} y={44} />
-                </>
-              )}
-            </g>
-          )}
+                {variant === 3 && (
+                  <>
+                    <path
+                      d="M12,98 Q42,64 88,36"
+                      fill="none"
+                      stroke="#e9dfc7"
+                      strokeWidth="7"
+                      strokeLinecap="round"
+                    />
+                    <MiniBench x={32} y={58} scale={0.95} />
+                    <StaticTreeBase x={25} y={78} scale={0.86} />
+                    <StaticTreeBase x={76} y={72} scale={0.92} />
+                    <StaticFlowerBase x={55} y={82} />
+                    <StaticFlowerBase x={72} y={44} />
+                  </>
+                )}
+              </g>
+            )}
 
-          {/* RESIDENTIAL STATIC BASE */}
-          {zone === 'R' && (
-            <g>
-              {variant === 0 && (
-                <>
-                  <g transform={`translate(${anchors.propX - 10}, ${anchors.propY + 2})`} opacity="0.9">
-                    <line x1="0" y1="0" x2="18" y2="0" stroke="#fbf8f2" strokeWidth="1.4" />
-                    <line x1="0" y1="3" x2="18" y2="3" stroke="#fbf8f2" strokeWidth="1.4" />
-                    {[1, 5, 9, 13, 17].map((fx) => (
-                      <rect key={fx} x={fx} y="-2.5" width="1.6" height="7" rx="0.5" fill="#fffdf9" />
-                    ))}
-                  </g>
-                  <MiniHouseStatic
-                    x={anchors.secX}
-                    y={anchors.secY}
-                    scale={0.84}
-                    roofColor={houseRoofs[(accentIdx + 1) % 3].main}
-                    roofShade={houseRoofs[(accentIdx + 1) % 3].shade}
-                  />
-                  <StaticLampPole x={anchors.propX + 10} y={anchors.propY + 3} scale={0.82} />
-                </>
-              )}
+            {/* RESIDENTIAL STATIC BASE */}
+            {zone === 'R' && (
+              <g>
+                {variant === 0 && (
+                  <>
+                    <g transform={`translate(${anchors.propX - 10}, ${anchors.propY + 2})`} opacity="0.9">
+                      <line x1="0" y1="0" x2="18" y2="0" stroke="#fbf8f2" strokeWidth="1.4" />
+                      <line x1="0" y1="3" x2="18" y2="3" stroke="#fbf8f2" strokeWidth="1.4" />
+                      {[1, 5, 9, 13, 17].map((fx) => (
+                        <rect key={fx} x={fx} y="-2.5" width="1.6" height="7" rx="0.5" fill="#fffdf9" />
+                      ))}
+                    </g>
+                    <MiniHouseStatic
+                      x={anchors.secX}
+                      y={anchors.secY}
+                      scale={0.84}
+                      roofColor={houseRoofs[(accentIdx + 1) % 3].main}
+                      roofShade={houseRoofs[(accentIdx + 1) % 3].shade}
+                    />
+                  </>
+                )}
 
-              {variant === 1 && (
-                <>
-                  <StaticTreeBase x={anchors.propX} y={anchors.propY + 2} scale={0.72} />
-                  <MiniHouseStatic
-                    x={anchors.secX}
-                    y={anchors.secY}
-                    scale={0.82}
-                    roofColor={houseRoofs[accentIdx].main}
-                    roofShade={houseRoofs[accentIdx].shade}
-                  />
-                  <StaticFlowerBase x={anchors.propX + 11} y={anchors.propY + 4} />
-                </>
-              )}
+                {variant === 1 && (
+                  <>
+                    <StaticTreeBase x={anchors.propX} y={anchors.propY + 2} scale={0.72} />
+                    <MiniHouseStatic
+                      x={anchors.secX}
+                      y={anchors.secY}
+                      scale={0.82}
+                      roofColor={houseRoofs[accentIdx].main}
+                      roofShade={houseRoofs[accentIdx].shade}
+                    />
+                    <StaticFlowerBase x={anchors.propX + 11} y={anchors.propY + 4} />
+                  </>
+                )}
 
-              {variant === 2 && (
-                <>
-                  <MiniHouseStatic
-                    x={anchors.secX}
-                    y={anchors.secY}
-                    scale={0.88}
-                    roofColor={houseRoofs[(accentIdx + 2) % 3].main}
-                    roofShade={houseRoofs[(accentIdx + 2) % 3].shade}
-                    hasChimney
-                  />
-                  <StaticTreeBase x={anchors.propX} y={anchors.propY} scale={0.74} />
-                </>
-              )}
+                {variant === 2 && (
+                  <>
+                    <MiniHouseStatic
+                      x={anchors.secX}
+                      y={anchors.secY}
+                      scale={0.88}
+                      roofColor={houseRoofs[(accentIdx + 2) % 3].main}
+                      roofShade={houseRoofs[(accentIdx + 2) % 3].shade}
+                      hasChimney
+                    />
+                    <StaticTreeBase x={anchors.propX} y={anchors.propY} scale={0.74} />
+                  </>
+                )}
 
-              {variant === 3 && (
-                <>
-                  <ellipse cx={anchors.secX} cy={anchors.secY + 2} rx="14" ry="6" fill="#e9cfb8" opacity="0.65" />
-                  <MiniHouseStatic
-                    x={anchors.secX}
-                    y={anchors.secY}
-                    scale={0.86}
-                    roofColor={houseRoofs[accentIdx].main}
-                    roofShade={houseRoofs[accentIdx].shade}
-                  />
-                  <StaticLampPole x={anchors.propX - 2} y={anchors.propY + 3} scale={0.85} />
-                  <StaticFlowerBase x={anchors.propX + 8} y={anchors.propY + 3} />
-                </>
-              )}
-            </g>
-          )}
+                {variant === 3 && (
+                  <>
+                    <ellipse cx={anchors.secX} cy={anchors.secY + 2} rx="14" ry="6" fill="#e9cfb8" opacity="0.65" />
+                    <MiniHouseStatic
+                      x={anchors.secX}
+                      y={anchors.secY}
+                      scale={0.86}
+                      roofColor={houseRoofs[accentIdx].main}
+                      roofShade={houseRoofs[accentIdx].shade}
+                    />
+                    <StaticFlowerBase x={anchors.propX + 8} y={anchors.propY + 3} />
+                  </>
+                )}
+              </g>
+            )}
 
-          {/* COMMERCIAL STATIC BASE */}
-          {zone === 'C' && (
-            <g>
-              <rect
-                x={anchors.secX - 15}
-                y={anchors.secY - 12}
-                width="30"
-                height="18"
-                rx="4"
-                fill="#d6e7f2"
-                opacity="0.55"
-              />
-              {variant === 0 && (
-                <>
-                  <MiniShopStatic
-                    x={anchors.secX}
-                    y={anchors.secY}
-                    scale={0.84}
-                    awningA={shopAwnings[(accentIdx + 1) % 3]}
-                  />
-                  <g transform={`translate(${anchors.propX}, ${anchors.propY + 2})`}>
-                    <ellipse cx="1" cy="2" rx="5.5" ry="2.2" fill="#292524" opacity="0.16" />
-                    <line x1="0" y1="1" x2="0" y2="-6" stroke="#6d5843" strokeWidth="1.2" />
-                    <ellipse cx="0" cy="-6.5" rx="6" ry="3.2" fill={shopAwnings[accentIdx]} />
-                    <ellipse cx="-1.5" cy="-7" rx="2.4" ry="1.2" fill="#fffdf9" opacity="0.45" />
-                  </g>
-                  <StaticLampPole x={anchors.propX + 11} y={anchors.propY + 3} scale={0.8} />
-                </>
-              )}
+            {/* COMMERCIAL STATIC BASE */}
+            {zone === 'C' && (
+              <g>
+                <rect
+                  x={anchors.secX - 15}
+                  y={anchors.secY - 12}
+                  width="30"
+                  height="18"
+                  rx="4"
+                  fill="#d6e7f2"
+                  opacity="0.55"
+                />
+                {variant === 0 && (
+                  <>
+                    <MiniShopStatic
+                      x={anchors.secX}
+                      y={anchors.secY}
+                      scale={0.84}
+                      awningA={shopAwnings[(accentIdx + 1) % 3]}
+                    />
+                    <g transform={`translate(${anchors.propX}, ${anchors.propY + 2})`}>
+                      <ellipse cx="1" cy="2" rx="5.5" ry="2.2" fill="#292524" opacity="0.16" />
+                      <line x1="0" y1="1" x2="0" y2="-6" stroke="#6d5843" strokeWidth="1.2" />
+                      <ellipse cx="0" cy="-6.5" rx="6" ry="3.2" fill={shopAwnings[accentIdx]} />
+                      <ellipse cx="-1.5" cy="-7" rx="2.4" ry="1.2" fill="#fffdf9" opacity="0.45" />
+                    </g>
+                  </>
+                )}
 
-              {variant === 1 && (
-                <>
-                  <MiniShopStatic
-                    x={anchors.secX}
-                    y={anchors.secY}
-                    scale={0.84}
-                    awningA={shopAwnings[accentIdx]}
-                  />
-                  <StaticTreeBase x={anchors.propX} y={anchors.propY + 2} scale={0.68} />
-                  <StaticLampPole x={anchors.propX + 10} y={anchors.propY + 2} scale={0.8} />
-                </>
-              )}
+                {variant === 1 && (
+                  <>
+                    <MiniShopStatic
+                      x={anchors.secX}
+                      y={anchors.secY}
+                      scale={0.84}
+                      awningA={shopAwnings[accentIdx]}
+                    />
+                    <StaticTreeBase x={anchors.propX} y={anchors.propY + 2} scale={0.68} />
+                  </>
+                )}
 
-              {variant === 2 && (
-                <>
-                  <MiniShopStatic
-                    x={anchors.secX}
-                    y={anchors.secY}
-                    scale={0.86}
-                    awningA={shopAwnings[(accentIdx + 2) % 3]}
-                  />
-                  <g transform={`translate(${anchors.propX}, ${anchors.propY + 1})`}>
-                    <rect x="-7" y="-2" width="4.5" height="3.5" rx="0.8" fill="#c87355" />
-                    <circle cx="-4.8" cy="-3.6" r="2.8" fill="#63a170" />
-                    <rect x="2" y="-2" width="4.5" height="3.5" rx="0.8" fill="#c87355" />
-                    <circle cx="4.2" cy="-3.6" r="2.8" fill="#74b482" />
-                  </g>
-                </>
-              )}
+                {variant === 2 && (
+                  <>
+                    <MiniShopStatic
+                      x={anchors.secX}
+                      y={anchors.secY}
+                      scale={0.86}
+                      awningA={shopAwnings[(accentIdx + 2) % 3]}
+                    />
+                    <g transform={`translate(${anchors.propX}, ${anchors.propY + 1})`}>
+                      <rect x="-7" y="-2" width="4.5" height="3.5" rx="0.8" fill="#c87355" />
+                      <circle cx="-4.8" cy="-3.6" r="2.8" fill="#63a170" />
+                      <rect x="2" y="-2" width="4.5" height="3.5" rx="0.8" fill="#c87355" />
+                      <circle cx="4.2" cy="-3.6" r="2.8" fill="#74b482" />
+                    </g>
+                  </>
+                )}
 
-              {variant === 3 && (
-                <>
-                  <MiniShopStatic
-                    x={anchors.secX}
-                    y={anchors.secY}
-                    scale={0.84}
-                    awningA={shopAwnings[accentIdx]}
-                    tall
-                  />
-                  <MiniBench x={anchors.propX + 2} y={anchors.propY + 2} scale={0.82} />
-                </>
-              )}
-            </g>
-          )}
+                {variant === 3 && (
+                  <>
+                    <MiniShopStatic
+                      x={anchors.secX}
+                      y={anchors.secY}
+                      scale={0.84}
+                      awningA={shopAwnings[accentIdx]}
+                      tall
+                    />
+                    <MiniBench x={anchors.propX + 2} y={anchors.propY + 2} scale={0.82} />
+                  </>
+                )}
+              </g>
+            )}
 
-          {/* INDUSTRIAL STATIC BASE */}
-          {zone === 'I' && (
-            <g>
-              <rect
-                x={anchors.secX - 14}
-                y={anchors.secY - 10}
-                width="28"
-                height="16"
-                rx="3"
-                fill="#c5b495"
-                opacity="0.65"
-              />
-              {variant === 0 && (
-                <>
-                  <MiniCrates x={anchors.secX} y={anchors.secY + 1} accent={cargoColors[accentIdx]} />
-                  <g transform={`translate(${anchors.propX}, ${anchors.propY + 2})`}>
-                    <rect x="-0.9" y="-14" width="1.8" height="15" fill="#6d6459" />
-                    <line x1="-5" y1="-11.5" x2="5" y2="-11.5" stroke="#6d6459" strokeWidth="1.4" />
-                  </g>
-                  <MiniCrates x={anchors.propX + 10} y={anchors.propY + 3} accent={cargoColors[(accentIdx + 1) % 3]} />
-                </>
-              )}
+            {/* INDUSTRIAL STATIC BASE */}
+            {zone === 'I' && (
+              <g>
+                <rect
+                  x={anchors.secX - 14}
+                  y={anchors.secY - 10}
+                  width="28"
+                  height="16"
+                  rx="3"
+                  fill="#c5b495"
+                  opacity="0.65"
+                />
+                {variant === 0 && (
+                  <>
+                    <MiniCrates x={anchors.secX} y={anchors.secY + 1} accent={cargoColors[accentIdx]} />
+                    <MiniCrates x={anchors.propX + 10} y={anchors.propY + 3} accent={cargoColors[(accentIdx + 1) % 3]} />
+                  </>
+                )}
 
-              {variant === 1 && (
-                <>
-                  <MiniFactoryStatic x={anchors.secX} y={anchors.secY + 1} scale={0.78} variant="warehouse" />
-                  <MiniCrates x={anchors.propX + 2} y={anchors.propY + 2} accent={cargoColors[accentIdx]} />
-                </>
-              )}
+                {variant === 1 && (
+                  <>
+                    <MiniFactoryStatic x={anchors.secX} y={anchors.secY + 1} scale={0.78} variant="warehouse" />
+                    <MiniCrates x={anchors.propX + 2} y={anchors.propY + 2} accent={cargoColors[accentIdx]} />
+                  </>
+                )}
 
-              {variant === 2 && (
-                <>
+                {variant === 2 && (
                   <MiniFactoryStatic x={anchors.secX} y={anchors.secY + 1} scale={0.82} variant="silos" />
-                  <StaticLampPole x={anchors.propX} y={anchors.propY + 3} scale={0.82} />
-                </>
-              )}
+                )}
 
-              {variant === 3 && (
-                <>
-                  <MiniCrates x={anchors.secX - 3} y={anchors.secY + 2} accent={cargoColors[(accentIdx + 2) % 3]} />
-                  <g transform={`translate(${anchors.propX - 8}, ${anchors.propY + 1})`} opacity="0.8">
-                    <line x1="0" y1="0" x2="18" y2="0" stroke="#78716c" strokeWidth="1.2" />
-                    <line x1="0" y1="3.5" x2="18" y2="3.5" stroke="#78716c" strokeWidth="1.2" />
-                    {[1, 6, 11, 16].map((fx) => (
-                      <line key={fx} x1={fx} y1="-2" x2={fx} y2="5" stroke="#646e78" strokeWidth="1.3" />
-                    ))}
-                  </g>
-                </>
-              )}
-            </g>
-          )}
-        </svg>
+                {variant === 3 && (
+                  <>
+                    <MiniCrates x={anchors.secX - 3} y={anchors.secY + 2} accent={cargoColors[(accentIdx + 2) % 3]} />
+                    <g transform={`translate(${anchors.propX - 8}, ${anchors.propY + 1})`} opacity="0.8">
+                      <line x1="0" y1="0" x2="18" y2="0" stroke="#78716c" strokeWidth="1.2" />
+                      <line x1="0" y1="3.5" x2="18" y2="3.5" stroke="#78716c" strokeWidth="1.2" />
+                      {[1, 6, 11, 16].map((fx) => (
+                        <line key={fx} x1={fx} y1="-2" x2={fx} y2="5" stroke="#646e78" strokeWidth="1.3" />
+                      ))}
+                    </g>
+                  </>
+                )}
+              </g>
+            )}
 
-        {/* Animated HTML Base Ornaments (Trees, Flowers, Duck, Ripples, Lamps, Secondary Chimney Smoke) */}
-        <div className={`${htmlOverlayBoxClass} z-[1]`}>
-          {zone === 'P' && variant === 0 && (
-            <>
-              <AnimatedWaterRipple x={56} y={54} widthPct={23} heightPct={13} delay={delay1} />
-              <AnimatedPondDuck x={58} y={53} delay={delay2} />
-              <AnimatedFlowerBlooms x={78} y={76} delay={delay1} duration={flowerDur} />
-              <AnimatedTreeCanopy x={22} y={50} scale={0.92} variant="round" delay={delay2} duration={treeDur2} />
-            </>
-          )}
-          {zone === 'P' && variant === 1 && (
-            <>
-              <AnimatedFlowerBlooms x={25} y={62} delay={delay1} duration={flowerDur} />
-              <AnimatedFlowerBlooms x={77} y={82} delay={delay2} duration={flowerDur} />
-              <AnimatedTreeCanopy x={75} y={52} scale={0.95} variant="pine" delay={delay1} duration={treeDur1} />
-              <AnimatedTreeCanopy x={24} y={84} scale={0.78} variant="blossom" delay={delay3} duration={treeDur2} />
-            </>
-          )}
-          {zone === 'P' && variant === 2 && (
-            <>
-              <AnimatedWaterRipple x={50} y={56} widthPct={15} heightPct={15} delay={delay1} />
-              <AnimatedFlowerBlooms x={21} y={76} delay={delay2} duration={flowerDur} />
-              <AnimatedTreeCanopy x={80} y={72} scale={0.85} variant="round" delay={delay1} duration={treeDur1} />
-            </>
-          )}
-          {zone === 'P' && variant === 3 && (
-            <>
-              <AnimatedTreeCanopy x={25} y={78} scale={0.86} variant="blossom" delay={delay1} duration={treeDur1} />
-              <AnimatedTreeCanopy x={76} y={72} scale={0.92} variant="pine" delay={delay2} duration={treeDur2} />
-              <AnimatedFlowerBlooms x={55} y={82} delay={delay1} duration={flowerDur} />
-              <AnimatedFlowerBlooms x={72} y={44} delay={delay3} duration={flowerDur} />
-            </>
-          )}
+            {/* Streetlamp & Park Lantern Poles (Unified across all zones) */}
+            {lampPositions.map((lp, idx) => (
+              <StaticLampPole key={idx} x={lp.x} y={lp.y} scale={lp.scale} />
+            ))}
+          </svg>
 
-          {zone === 'R' && variant === 0 && (
-            <AnimatedLampGlow x={anchors.propX + 10} y={anchors.propY + 3} scale={0.82} delay={delay1} />
-          )}
-          {zone === 'R' && variant === 1 && (
-            <>
-              <AnimatedTreeCanopy x={anchors.propX} y={anchors.propY + 2} scale={0.72} variant="round" delay={delay1} duration={treeDur1} />
-              <AnimatedFlowerBlooms x={anchors.propX + 11} y={anchors.propY + 4} delay={delay2} duration={flowerDur} />
-            </>
-          )}
-          {zone === 'R' && variant === 2 && (
-            <>
-              <AnimatedSmokePuff
-                x={anchors.secX + 4.1 * 0.88}
-                y={anchors.secY - 25.2 * 0.88}
-                sizePct={5.2}
-                delay={delay1}
-              />
-              <AnimatedTreeCanopy x={anchors.propX} y={anchors.propY} scale={0.74} variant="blossom" delay={delay2} duration={treeDur2} />
-            </>
-          )}
-          {zone === 'R' && variant === 3 && (
-            <>
-              <AnimatedLampGlow x={anchors.propX - 2} y={anchors.propY + 3} scale={0.85} delay={delay2} />
+          {/* Animated HTML Base Ornaments (Trees, Flowers, Duck, Ripples, Secondary Chimney Smoke) */}
+          <div className={`${htmlOverlayBoxClass} z-[1]`}>
+            {zone === 'P' && variant === 0 && (
+              <>
+                <AnimatedWaterRipple x={56} y={54} widthPct={23} heightPct={13} delay={delay1} />
+                <AnimatedPondDuck x={58} y={53} delay={delay2} />
+                <AnimatedFlowerBlooms x={78} y={76} delay={delay1} duration={flowerDur} />
+                <AnimatedTreeCanopy x={22} y={50} scale={0.92} variant="round" delay={delay2} duration={treeDur2} />
+              </>
+            )}
+            {zone === 'P' && variant === 1 && (
+              <>
+                <AnimatedFlowerBlooms x={25} y={62} delay={delay1} duration={flowerDur} />
+                <AnimatedFlowerBlooms x={77} y={82} delay={delay2} duration={flowerDur} />
+                <AnimatedTreeCanopy x={75} y={52} scale={0.95} variant="pine" delay={delay1} duration={treeDur1} />
+                <AnimatedTreeCanopy x={24} y={84} scale={0.78} variant="blossom" delay={delay3} duration={treeDur2} />
+              </>
+            )}
+            {zone === 'P' && variant === 2 && (
+              <>
+                <AnimatedWaterRipple x={50} y={56} widthPct={15} heightPct={15} delay={delay1} />
+                <AnimatedFlowerBlooms x={21} y={76} delay={delay2} duration={flowerDur} />
+                <AnimatedTreeCanopy x={80} y={72} scale={0.85} variant="round" delay={delay1} duration={treeDur1} />
+              </>
+            )}
+            {zone === 'P' && variant === 3 && (
+              <>
+                <AnimatedTreeCanopy x={25} y={78} scale={0.86} variant="blossom" delay={delay1} duration={treeDur1} />
+                <AnimatedTreeCanopy x={76} y={72} scale={0.92} variant="pine" delay={delay2} duration={treeDur2} />
+                <AnimatedFlowerBlooms x={55} y={82} delay={delay1} duration={flowerDur} />
+                <AnimatedFlowerBlooms x={72} y={44} delay={delay3} duration={flowerDur} />
+              </>
+            )}
+
+            {zone === 'R' && variant === 1 && (
+              <>
+                <AnimatedTreeCanopy x={anchors.propX} y={anchors.propY + 2} scale={0.72} variant="round" delay={delay1} duration={treeDur1} />
+                <AnimatedFlowerBlooms x={anchors.propX + 11} y={anchors.propY + 4} delay={delay2} duration={flowerDur} />
+              </>
+            )}
+            {zone === 'R' && variant === 2 && (
+              <>
+                <AnimatedSmokePuff
+                  x={anchors.secX + 4.1 * 0.88}
+                  y={anchors.secY - 25.2 * 0.88}
+                  sizePct={5.2}
+                  delay={delay1}
+                />
+                <AnimatedTreeCanopy x={anchors.propX} y={anchors.propY} scale={0.74} variant="blossom" delay={delay2} duration={treeDur2} />
+              </>
+            )}
+            {zone === 'R' && variant === 3 && (
               <AnimatedFlowerBlooms x={anchors.propX + 8} y={anchors.propY + 3} delay={delay1} duration={flowerDur} />
-            </>
-          )}
+            )}
 
-          {zone === 'C' && variant === 0 && (
-            <AnimatedLampGlow x={anchors.propX + 11} y={anchors.propY + 3} scale={0.8} delay={delay2} />
-          )}
-          {zone === 'C' && variant === 1 && (
-            <>
+            {zone === 'C' && variant === 1 && (
               <AnimatedTreeCanopy x={anchors.propX} y={anchors.propY + 2} scale={0.68} variant="round" delay={delay1} duration={treeDur1} />
-              <AnimatedLampGlow x={anchors.propX + 10} y={anchors.propY + 2} scale={0.8} delay={delay3} />
-            </>
-          )}
+            )}
+          </div>
 
-          {zone === 'I' && variant === 2 && (
-            <AnimatedLampGlow x={anchors.propX} y={anchors.propY + 3} scale={0.82} delay={delay2} />
+          {/* Crisp Soft Asphalt Road Layer (Always above base ground ornaments & connected seamlessly) */}
+          {hasRoads && (
+            <svg
+              viewBox="0 0 100 100"
+              className="absolute inset-0 w-full h-full pointer-events-none z-[2]"
+              aria-hidden="true"
+            >
+              {/* Subtle Road Curb */}
+              {roads.top && (
+                <line x1="50" y1="50" x2="50" y2="0" stroke="#7d8791" strokeWidth="26" strokeLinecap="square" />
+              )}
+              {roads.right && (
+                <line x1="50" y1="50" x2={isMini ? 124 : 100} y2="50" stroke="#7d8791" strokeWidth="26" strokeLinecap="square" />
+              )}
+              {roads.bottom && (
+                <line x1="50" y1="50" x2="50" y2="100" stroke="#7d8791" strokeWidth="26" strokeLinecap="square" />
+              )}
+              {roads.left && (
+                <line x1="50" y1="50" x2={isMini ? -24 : 0} y2="50" stroke="#7d8791" strokeWidth="26" strokeLinecap="square" />
+              )}
+
+              {/* Soft Asphalt Base (#646e78) */}
+              {roads.top && (
+                <line x1="50" y1="50" x2="50" y2="0" stroke="#646e78" strokeWidth="21" strokeLinecap="square" />
+              )}
+              {roads.right && (
+                <line x1="50" y1="50" x2={isMini ? 124 : 100} y2="50" stroke="#646e78" strokeWidth="21" strokeLinecap="square" />
+              )}
+              {roads.bottom && (
+                <line x1="50" y1="50" x2="50" y2="100" stroke="#646e78" strokeWidth="21" strokeLinecap="square" />
+              )}
+              {roads.left && (
+                <line x1="50" y1="50" x2={isMini ? -24 : 0} y2="50" stroke="#646e78" strokeWidth="21" strokeLinecap="square" />
+              )}
+
+              {/* Smooth Intersection Hub */}
+              <circle cx="50" cy="50" r="10.5" fill="#646e78" />
+
+              {/* Soft Cream Center Dashes (#fdf8ee) */}
+              {roads.top && (
+                <line x1="50" y1="50" x2="50" y2="0" stroke="#fdf8ee" strokeWidth="2.8" strokeDasharray="6,5" strokeLinecap="round" />
+              )}
+              {roads.right && (
+                <line x1="50" y1="50" x2={isMini ? 124 : 100} y2="50" stroke="#fdf8ee" strokeWidth="2.8" strokeDasharray="6,5" strokeLinecap="round" />
+              )}
+              {roads.bottom && (
+                <line x1="50" y1="50" x2="50" y2="100" stroke="#fdf8ee" strokeWidth="2.8" strokeDasharray="6,5" strokeLinecap="round" />
+              )}
+              {roads.left && (
+                <line x1="50" y1="50" x2={isMini ? -24 : 0} y2="50" stroke="#fdf8ee" strokeWidth="2.8" strokeDasharray="6,5" strokeLinecap="round" />
+              )}
+            </svg>
           )}
         </div>
 
-        {/* Crisp Soft Asphalt Road Layer (Always above base ground ornaments & connected seamlessly) */}
-        {hasRoads && (
-          <svg
-            viewBox="0 0 100 100"
-            className="absolute inset-0 w-full h-full pointer-events-none z-[2]"
-            aria-hidden="true"
-          >
-            {/* Subtle Road Curb */}
-            {roads.top && (
-              <line x1="50" y1="50" x2="50" y2="0" stroke="#7d8791" strokeWidth="26" strokeLinecap="square" />
-            )}
-            {roads.right && (
-              <line x1="50" y1="50" x2={isMini ? 124 : 100} y2="50" stroke="#7d8791" strokeWidth="26" strokeLinecap="square" />
-            )}
-            {roads.bottom && (
-              <line x1="50" y1="50" x2="50" y2="100" stroke="#7d8791" strokeWidth="26" strokeLinecap="square" />
-            )}
-            {roads.left && (
-              <line x1="50" y1="50" x2={isMini ? -24 : 0} y2="50" stroke="#7d8791" strokeWidth="26" strokeLinecap="square" />
-            )}
+        {/* Un-dimmed Emissive Base Lights (Lit Secondary Windows + Warm Streetlamp Sidewalk/Road Light Pools) */}
+        <svg
+          viewBox="0 0 100 100"
+          className="absolute inset-0 w-full h-full pointer-events-none z-[3]"
+          style={{ opacity: 'var(--city-window-opacity, 0)' }}
+          aria-hidden="true"
+        >
+          {zone === 'R' && (
+            <MiniHouseLights
+              x={anchors.secX}
+              y={anchors.secY}
+              scale={variant === 0 ? 0.84 : variant === 1 ? 0.82 : variant === 2 ? 0.88 : 0.86}
+            />
+          )}
+          {zone === 'C' && (
+            <MiniShopLights
+              x={anchors.secX}
+              y={anchors.secY}
+              scale={variant === 2 ? 0.86 : 0.84}
+              tall={variant === 3}
+            />
+          )}
+          {zone === 'I' && variant === 1 && (
+            <MiniFactoryLights x={anchors.secX} y={anchors.secY + 1} scale={0.78} variant="warehouse" />
+          )}
+          {zone === 'I' && variant === 2 && (
+            <MiniFactoryLights x={anchors.secX} y={anchors.secY + 1} scale={0.82} variant="silos" />
+          )}
+        </svg>
 
-            {/* Soft Asphalt Base (#646e78) */}
-            {roads.top && (
-              <line x1="50" y1="50" x2="50" y2="0" stroke="#646e78" strokeWidth="21" strokeLinecap="square" />
-            )}
-            {roads.right && (
-              <line x1="50" y1="50" x2={isMini ? 124 : 100} y2="50" stroke="#646e78" strokeWidth="21" strokeLinecap="square" />
-            )}
-            {roads.bottom && (
-              <line x1="50" y1="50" x2="50" y2="100" stroke="#646e78" strokeWidth="21" strokeLinecap="square" />
-            )}
-            {roads.left && (
-              <line x1="50" y1="50" x2={isMini ? -24 : 0} y2="50" stroke="#646e78" strokeWidth="21" strokeLinecap="square" />
-            )}
+        <div className={`${htmlOverlayBoxClass} z-[4]`}>
+          {/* Warm Streetlamp / Park Lantern Ground Light Pools Illuminating Sidewalk & Asphalt */}
+          {lampPositions.map((lp, idx) => (
+            <LampGroundPool key={idx} x={lp.x} y={lp.y} scale={lp.scale} />
+          ))}
 
-            {/* Smooth Intersection Hub */}
-            <circle cx="50" cy="50" r="10.5" fill="#646e78" />
-
-            {/* Soft Cream Center Dashes (#fdf8ee) */}
-            {roads.top && (
-              <line x1="50" y1="50" x2="50" y2="0" stroke="#fdf8ee" strokeWidth="2.8" strokeDasharray="6,5" strokeLinecap="round" />
-            )}
-            {roads.right && (
-              <line x1="50" y1="50" x2={isMini ? 124 : 100} y2="50" stroke="#fdf8ee" strokeWidth="2.8" strokeDasharray="6,5" strokeLinecap="round" />
-            )}
-            {roads.bottom && (
-              <line x1="50" y1="50" x2="50" y2="100" stroke="#fdf8ee" strokeWidth="2.8" strokeDasharray="6,5" strokeLinecap="round" />
-            )}
-            {roads.left && (
-              <line x1="50" y1="50" x2={isMini ? -24 : 0} y2="50" stroke="#fdf8ee" strokeWidth="2.8" strokeDasharray="6,5" strokeLinecap="round" />
-            )}
-          </svg>
-        )}
+          {/* Secondary Building Warm Window Spill Halos */}
+          {zone === 'R' && (
+            <AnimatedWindowGlow x={anchors.secX - 2} y={anchors.secY - 6} sizePct={26} />
+          )}
+          {zone === 'C' && (
+            <AnimatedWindowGlow x={anchors.secX - 3} y={anchors.secY - 5} sizePct={28} />
+          )}
+          {zone === 'I' && (variant === 1 || variant === 2) && (
+            <AnimatedWindowGlow x={anchors.secX - 2} y={anchors.secY - 8} sizePct={24} />
+          )}
+        </div>
       </div>
     );
   }
 
   // =========================================================================
-  // LAYER 2: 2.5D POP-OUT HERO ORNAMENTS (Static Buildings/Trunks + Animated HTML Pop-Outs)
+  // LAYER 2: 2.5D POP-OUT HERO ORNAMENTS (Dimmed Structures + Un-dimmed Glowing Lights)
   // =========================================================================
   const heroScale = isMini ? 0.82 : 0.96;
   const heroY = isMini ? Math.max(anchors.heroY, 27) : anchors.heroY;
@@ -968,136 +1210,187 @@ export const BlockDioramaArt: React.FC<BlockDioramaArtProps> = ({
 
   return (
     <div className="absolute inset-0 w-full h-full pointer-events-none overflow-visible z-20">
-      {/* Static Pop-Out Structures & Tree Trunks */}
+      {/* Non-Emissive Pop-Out Buildings, Tree Canopies & Ornaments (Saturation-preserving night lighting) */}
+      <div className="absolute inset-0 w-full h-full pointer-events-none overflow-visible city-night-surface">
+        {/* Static Pop-Out Structures & Tree Trunks */}
+        <svg
+          viewBox="0 0 100 100"
+          overflow="visible"
+          className="absolute inset-0 w-full h-full pointer-events-none"
+          aria-hidden="true"
+        >
+          {zone === 'P' && variant === 0 && (
+            <>
+              <StaticTreeBase x={28} y={isMini ? 24 : 20} scale={isMini ? 0.92 : 1.18} />
+              <StaticTreeBase x={72} y={isMini ? 26 : 23} scale={isMini ? 0.8 : 0.98} />
+            </>
+          )}
+          {zone === 'P' && variant === 1 && (
+            <>
+              <StaticTreeBase x={26} y={isMini ? 24 : 20} scale={isMini ? 0.92 : 1.18} />
+              <StaticTreeBase x={70} y={isMini ? 25 : 21} scale={isMini ? 0.84 : 1.08} />
+            </>
+          )}
+          {zone === 'P' && variant === 2 && (
+            <>
+              <StaticTreeBase x={24} y={isMini ? 24 : 20} scale={isMini ? 0.88 : 1.15} />
+              <StaticTreeBase x={75} y={isMini ? 25 : 22} scale={isMini ? 0.86 : 1.08} />
+            </>
+          )}
+          {zone === 'P' && variant === 3 && (
+            <>
+              <StaticTreeBase x={70} y={isMini ? 24 : 20} scale={isMini ? 0.92 : 1.18} />
+              <StaticTreeBase x={26} y={isMini ? 26 : 22} scale={isMini ? 0.84 : 1.05} />
+            </>
+          )}
+
+          {zone === 'R' && (
+            <MiniHouseStatic
+              x={anchors.heroX}
+              y={heroY}
+              scale={heroScale}
+              roofColor={houseRoofs[accentIdx].main}
+              roofShade={houseRoofs[accentIdx].shade}
+              tall={isHouseTall}
+              hasChimney={hasHouseChimney}
+            />
+          )}
+
+          {zone === 'C' && (
+            <MiniShopStatic
+              x={anchors.heroX}
+              y={heroY}
+              scale={heroScale}
+              awningA={shopAwnings[accentIdx]}
+              tall={isShopTall}
+            />
+          )}
+
+          {zone === 'I' && (
+            <MiniFactoryStatic
+              x={anchors.heroX}
+              y={heroY}
+              scale={heroScale}
+              variant={factoryVariant}
+            />
+          )}
+        </svg>
+
+        {/* Animated HTML Pop-Out Ornaments (Tall Swaying Trees, Rising Smoke, Rooftop Cafe Signs) */}
+        <div className={htmlOverlayBoxClass}>
+          {zone === 'P' && variant === 0 && (
+            <>
+              <AnimatedTreeCanopy x={28} y={isMini ? 24 : 20} scale={isMini ? 0.92 : 1.18} variant="pine" delay={delay1} duration={treeDur1} />
+              <AnimatedTreeCanopy x={72} y={isMini ? 26 : 23} scale={isMini ? 0.8 : 0.98} variant="round" delay={delay2} duration={treeDur2} />
+            </>
+          )}
+          {zone === 'P' && variant === 1 && (
+            <>
+              <AnimatedTreeCanopy x={26} y={isMini ? 24 : 20} scale={isMini ? 0.92 : 1.18} variant="round" delay={delay1} duration={treeDur1} />
+              <AnimatedTreeCanopy x={70} y={isMini ? 25 : 21} scale={isMini ? 0.84 : 1.08} variant="pine" delay={delay2} duration={treeDur2} />
+            </>
+          )}
+          {zone === 'P' && variant === 2 && (
+            <>
+              <AnimatedTreeCanopy x={24} y={isMini ? 24 : 20} scale={isMini ? 0.88 : 1.15} variant="pine" delay={delay1} duration={treeDur1} />
+              <AnimatedTreeCanopy x={75} y={isMini ? 25 : 22} scale={isMini ? 0.86 : 1.08} variant="blossom" delay={delay2} duration={treeDur2} />
+            </>
+          )}
+          {zone === 'P' && variant === 3 && (
+            <>
+              <AnimatedTreeCanopy x={70} y={isMini ? 24 : 20} scale={isMini ? 0.92 : 1.18} variant="blossom" delay={delay1} duration={treeDur1} />
+              <AnimatedTreeCanopy x={26} y={isMini ? 26 : 22} scale={isMini ? 0.84 : 1.05} variant="pine" delay={delay2} duration={treeDur2} />
+            </>
+          )}
+
+          {/* Residential Hero Chimney Smoke */}
+          {zone === 'R' && hasHouseChimney && (
+            <AnimatedSmokePuff
+              x={anchors.heroX + 4.1 * heroScale}
+              y={heroY - (isHouseTall ? 31.2 : 25.2) * heroScale}
+              sizePct={6 * heroScale}
+              delay={delay1}
+            />
+          )}
+
+          {/* Commercial Hero Rooftop Cafe Sign */}
+          {zone === 'C' && hasShopSign && (
+            <AnimatedCafeSign
+              x={anchors.heroX - 2 * heroScale}
+              y={heroY - ((isShopTall ? 20 : 15) + 3) * heroScale}
+              scale={heroScale}
+              awningColor={shopAwnings[accentIdx]}
+              delay={delay1}
+            />
+          )}
+
+          {/* Industrial Hero Smokestack Dual Steam Puffs */}
+          {zone === 'I' && factoryVariant === 'sawtooth' && (
+            <>
+              <AnimatedSmokePuff
+                x={anchors.heroX + 5.5 * heroScale}
+                y={heroY - 28.5 * heroScale}
+                sizePct={7.2 * heroScale}
+                delay={delay1}
+                duration="3.1s"
+              />
+              <AnimatedSmokePuff
+                x={anchors.heroX + 6.9 * heroScale}
+                y={heroY - 29.5 * heroScale}
+                sizePct={5.8 * heroScale}
+                delay={delay2}
+                duration="3.1s"
+              />
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Un-dimmed Emissive Hero Windows (100% Pure Golden Contrast Above Night Surfaces) */}
       <svg
         viewBox="0 0 100 100"
         overflow="visible"
         className="absolute inset-0 w-full h-full pointer-events-none"
+        style={{ opacity: 'var(--city-window-opacity, 0)' }}
         aria-hidden="true"
       >
-        {zone === 'P' && variant === 0 && (
-          <>
-            <StaticTreeBase x={28} y={isMini ? 24 : 20} scale={isMini ? 0.92 : 1.18} />
-            <StaticTreeBase x={72} y={isMini ? 26 : 23} scale={isMini ? 0.8 : 0.98} />
-          </>
-        )}
-        {zone === 'P' && variant === 1 && (
-          <>
-            <StaticTreeBase x={26} y={isMini ? 24 : 20} scale={isMini ? 0.92 : 1.18} />
-            <StaticTreeBase x={70} y={isMini ? 25 : 21} scale={isMini ? 0.84 : 1.08} />
-          </>
-        )}
-        {zone === 'P' && variant === 2 && (
-          <>
-            <StaticTreeBase x={24} y={isMini ? 24 : 20} scale={isMini ? 0.88 : 1.15} />
-            <StaticTreeBase x={75} y={isMini ? 25 : 22} scale={isMini ? 0.86 : 1.08} />
-          </>
-        )}
-        {zone === 'P' && variant === 3 && (
-          <>
-            <StaticTreeBase x={70} y={isMini ? 24 : 20} scale={isMini ? 0.92 : 1.18} />
-            <StaticTreeBase x={26} y={isMini ? 26 : 22} scale={isMini ? 0.84 : 1.05} />
-          </>
-        )}
-
         {zone === 'R' && (
-          <MiniHouseStatic
-            x={anchors.heroX}
-            y={heroY}
-            scale={heroScale}
-            roofColor={houseRoofs[accentIdx].main}
-            roofShade={houseRoofs[accentIdx].shade}
-            tall={isHouseTall}
-            hasChimney={hasHouseChimney}
-          />
+          <MiniHouseLights x={anchors.heroX} y={heroY} scale={heroScale} tall={isHouseTall} />
         )}
-
         {zone === 'C' && (
-          <MiniShopStatic
-            x={anchors.heroX}
-            y={heroY}
-            scale={heroScale}
-            awningA={shopAwnings[accentIdx]}
-            tall={isShopTall}
-          />
+          <MiniShopLights x={anchors.heroX} y={heroY} scale={heroScale} tall={isShopTall} />
         )}
-
         {zone === 'I' && (
-          <MiniFactoryStatic
-            x={anchors.heroX}
-            y={heroY}
-            scale={heroScale}
-            variant={factoryVariant}
-          />
+          <MiniFactoryLights x={anchors.heroX} y={heroY} scale={heroScale} variant={factoryVariant} />
         )}
       </svg>
 
-      {/* Animated HTML Pop-Out Ornaments (Tall Swaying Trees, Rising Smoke, Rooftop Cafe Signs) */}
+      {/* Un-dimmed Unclipped Golden Streetlamp Blooms & Warm Hero Window Spill Halos */}
       <div className={htmlOverlayBoxClass}>
-        {zone === 'P' && variant === 0 && (
-          <>
-            <AnimatedTreeCanopy x={28} y={isMini ? 24 : 20} scale={isMini ? 0.92 : 1.18} variant="pine" delay={delay1} duration={treeDur1} />
-            <AnimatedTreeCanopy x={72} y={isMini ? 26 : 23} scale={isMini ? 0.8 : 0.98} variant="round" delay={delay2} duration={treeDur2} />
-          </>
-        )}
-        {zone === 'P' && variant === 1 && (
-          <>
-            <AnimatedTreeCanopy x={26} y={isMini ? 24 : 20} scale={isMini ? 0.92 : 1.18} variant="round" delay={delay1} duration={treeDur1} />
-            <AnimatedTreeCanopy x={70} y={isMini ? 25 : 21} scale={isMini ? 0.84 : 1.08} variant="pine" delay={delay2} duration={treeDur2} />
-          </>
-        )}
-        {zone === 'P' && variant === 2 && (
-          <>
-            <AnimatedTreeCanopy x={24} y={isMini ? 24 : 20} scale={isMini ? 0.88 : 1.15} variant="pine" delay={delay1} duration={treeDur1} />
-            <AnimatedTreeCanopy x={75} y={isMini ? 25 : 22} scale={isMini ? 0.86 : 1.08} variant="blossom" delay={delay2} duration={treeDur2} />
-          </>
-        )}
-        {zone === 'P' && variant === 3 && (
-          <>
-            <AnimatedTreeCanopy x={70} y={isMini ? 24 : 20} scale={isMini ? 0.92 : 1.18} variant="blossom" delay={delay1} duration={treeDur1} />
-            <AnimatedTreeCanopy x={26} y={isMini ? 26 : 22} scale={isMini ? 0.84 : 1.05} variant="pine" delay={delay2} duration={treeDur2} />
-          </>
-        )}
+        {lampPositions.map((lp, idx) => (
+          <AnimatedLampGlow key={idx} x={lp.x} y={lp.y} scale={lp.scale} delay={lp.delay} />
+        ))}
 
-        {/* Residential Hero Chimney Smoke */}
-        {zone === 'R' && hasHouseChimney && (
-          <AnimatedSmokePuff
-            x={anchors.heroX + 4.1 * heroScale}
-            y={heroY - (isHouseTall ? 31.2 : 25.2) * heroScale}
-            sizePct={6 * heroScale}
-            delay={delay1}
+        {zone === 'R' && (
+          <AnimatedWindowGlow
+            x={anchors.heroX - 3 * heroScale}
+            y={heroY - (isHouseTall ? 10 : 6) * heroScale}
+            sizePct={30 * heroScale}
           />
         )}
-
-        {/* Commercial Hero Rooftop Cafe Sign */}
-        {zone === 'C' && hasShopSign && (
-          <AnimatedCafeSign
-            x={anchors.heroX - 2 * heroScale}
-            y={heroY - ((isShopTall ? 20 : 15) + 3) * heroScale}
-            scale={heroScale}
-            awningColor={shopAwnings[accentIdx]}
-            delay={delay1}
+        {zone === 'C' && (
+          <AnimatedWindowGlow
+            x={anchors.heroX - 3.5 * heroScale}
+            y={heroY - (isShopTall ? 8 : 5) * heroScale}
+            sizePct={32 * heroScale}
           />
         )}
-
-        {/* Industrial Hero Smokestack Dual Steam Puffs */}
-        {zone === 'I' && factoryVariant === 'sawtooth' && (
-          <>
-            <AnimatedSmokePuff
-              x={anchors.heroX + 5.5 * heroScale}
-              y={heroY - 28.5 * heroScale}
-              sizePct={7.2 * heroScale}
-              delay={delay1}
-              duration="3.1s"
-            />
-            <AnimatedSmokePuff
-              x={anchors.heroX + 6.9 * heroScale}
-              y={heroY - 29.5 * heroScale}
-              sizePct={5.8 * heroScale}
-              delay={delay2}
-              duration="3.1s"
-            />
-          </>
+        {zone === 'I' && (
+          <AnimatedWindowGlow
+            x={anchors.heroX - 3 * heroScale}
+            y={heroY - (factoryVariant === 'silos' ? 18 : 6) * heroScale}
+            sizePct={26 * heroScale}
+          />
         )}
       </div>
     </div>

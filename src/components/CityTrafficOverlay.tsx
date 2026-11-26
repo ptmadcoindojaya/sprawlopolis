@@ -1,5 +1,6 @@
 import React, { useMemo, useEffect, useRef } from 'react';
 import { GridState, RoadEdges } from '../types';
+import { getLiveTrafficProfile } from '../utils/dayNightCycle';
 
 type EdgeDir = 'top' | 'right' | 'bottom' | 'left';
 
@@ -21,11 +22,19 @@ interface CarAgent {
   pathIndex: number;
   color: string;
   roofColor: string;
-  speed: number; // units per second (in 100-unit cell space)
+  baseSpeed: number; // cruising speed (units per second in 100-unit cell space)
+  initialDirection: 1 | -1;
+  priorityRank: number; // lower rank stays active first during quiet / midnight phases
+  seed: number;
+}
+
+interface CarSimState {
+  status: 'driving' | 'waiting';
+  dist: number;
   direction: 1 | -1;
-  cycleDuration: number; // travel time + short pause time
-  travelDuration: number;
-  phaseOffset: number;
+  waitRemaining: number;
+  opacity: number;
+  retiring: boolean;
 }
 
 interface CityTrafficOverlayProps {
@@ -141,7 +150,8 @@ function samplePolyline(
   dist: number,
   reverse: boolean
 ): { x: number; y: number; angleRad: number } {
-  const targetDist = reverse ? Math.max(0, path.totalLen - dist) : Math.min(path.totalLen, dist);
+  const clampedDist = Math.max(0, Math.min(path.totalLen, dist));
+  const targetDist = reverse ? path.totalLen - clampedDist : clampedDist;
   const { points, cumLen } = path;
 
   if (points.length < 2) {
@@ -319,6 +329,8 @@ function buildRoadPaths(
     }
   }
 
+  // Sort longest roads first so quiet/night phases prioritize main arteries
+  paths.sort((a, b) => b.totalLen - a.totalLen);
   return paths;
 }
 
@@ -339,54 +351,54 @@ export const CityTrafficOverlay: React.FC<CityTrafficOverlayProps> = ({
   const totalW = cols * cellW;
   const totalH = rows * cellH;
 
-  // Build connected road polylines & car agents deterministically
+  // Build connected road polylines & lightweight free-flowing car pool deterministically
   const { paths, cars } = useMemo(() => {
     const builtPaths = buildRoadPaths(grid, minX, minY, cellW, cellH);
     const builtCars: CarAgent[] = [];
-    const maxTotalCars = compact ? 3 : 20;
+    // Lightweight peak cap (10 cars on board during Pagi/Sore rush, 2 on compact previews) for silky-smooth FPS
+    const maxTotalCars = compact ? 2 : 10;
 
-    builtPaths.forEach((p, pathIndex) => {
-      if (builtCars.length >= maxTotalCars) return;
-      if (p.totalLen < 35) return;
+    const maxSlotsPerPath = builtPaths.map((p) => {
+      if (p.totalLen < 35) return 0;
+      if (compact) return 1;
+      if (p.totalLen >= 220) return 2;
+      return 1;
+    });
 
-      const h = hashString(p.id);
-      const desiredCarsForPath = compact
-        ? 1
-        : p.totalLen >= 480
-        ? 3
-        : p.totalLen >= 220
-        ? 2
-        : 1;
+    const highestSlotCount = Math.max(0, ...maxSlotsPerPath);
+    let rank = 0;
 
-      for (let c = 0; c < desiredCarsForPath; c++) {
+    for (let slotIdx = 0; slotIdx < highestSlotCount; slotIdx++) {
+      for (let pathIndex = 0; pathIndex < builtPaths.length; pathIndex++) {
         if (builtCars.length >= maxTotalCars) break;
-        const ch = hashString(`${p.id}-${c}`);
-        const palette = CAR_PALETTE[(ch + pathIndex) % CAR_PALETTE.length];
-        // Clear, smooth cruising speed (100 units = 1 block)
-        const speed = compact ? 52 + (ch % 16) : 66 + (ch % 20);
-        const travelDuration = p.totalLen / speed;
-        // Quick ~0.5s respawn pause on open roads; continuous on loops
-        const pauseDuration = p.isLoop ? 0 : 0.45 + ((ch >>> 4) % 4) * 0.05;
-        const cycleDuration = travelDuration + pauseDuration;
-        // First car starts mid-road so motion is immediately visible when loaded
-        const phaseOffset =
-          c === 0
-            ? ((h % 65) + 15) * 0.01 * travelDuration
-            : ((c / desiredCarsForPath) + ((h % 20) * 0.01)) * cycleDuration;
+        if (slotIdx >= maxSlotsPerPath[pathIndex]) continue;
+
+        const p = builtPaths[pathIndex];
+        const ch = hashString(`${p.id}-slot-${slotIdx}`);
+        const palette = CAR_PALETTE[(ch + pathIndex + slotIdx) % CAR_PALETTE.length];
+
+        // Gentle varied cruising speeds (48..76) so traffic feels organic & free-flowing
+        const baseSpeed = compact ? 52 + (ch % 14) : 48 + (ch % 8) * 4;
+
+        // Alternate lane directions across slots so two-way roads look lively
+        const dirBit = (hashString(p.id) >>> 1) & 1;
+        const primaryDir: 1 | -1 = dirBit === 0 ? 1 : -1;
+        const initialDirection: 1 | -1 =
+          slotIdx % 2 === 1 ? (primaryDir === 1 ? -1 : 1) : primaryDir;
 
         builtCars.push({
-          id: `${p.id}-car-${c}`,
+          id: `${p.id}-car-${slotIdx}`,
           pathIndex,
           color: palette.body,
           roofColor: palette.roof,
-          speed,
-          direction: c % 2 === 0 ? ((ch & 1) === 0 ? 1 : -1) : ((ch & 1) === 0 ? -1 : 1),
-          cycleDuration,
-          travelDuration,
-          phaseOffset
+          baseSpeed,
+          initialDirection,
+          priorityRank: rank++,
+          seed: ch
         });
       }
-    });
+      if (builtCars.length >= maxTotalCars) break;
+    }
 
     return { paths: builtPaths, cars: builtCars };
   }, [grid, minX, minY, compact, cellW, cellH]);
@@ -398,65 +410,194 @@ export const CityTrafficOverlay: React.FC<CityTrafficOverlayProps> = ({
 
     let rafId = 0;
     let isDisposed = false;
-    const laneOffset = compact ? 3.4 : 4.2;
+    // Right-hand lane lateral offset beside the cream centerline
+    const laneOffset = compact ? 4.2 : 5.2;
+
+    const initialProfile = compact
+      ? { densityFactor: 1, maxActiveCap: null, spawnWaitMinSec: 0.45, spawnWaitMaxSec: 0.9, isRushHour: false }
+      : getLiveTrafficProfile();
+
+    const initialTargetCount = compact
+      ? cars.length
+      : Math.max(
+          1,
+          Math.min(
+            initialProfile.maxActiveCap ?? cars.length,
+            Math.round(cars.length * initialProfile.densityFactor)
+          )
+        );
+
+    // Initialize free-flowing cars evenly spread across their paths (zero inter-car collision/queue state)
+    const simStates: CarSimState[] = cars.map((car, idx) => {
+      const path = paths[car.pathIndex];
+      const startActive = idx < initialTargetCount;
+      const startFrac = ((idx * 0.37 + (car.seed % 31) * 0.013) % 0.82) + 0.08;
+      const startDist = startActive && path ? startFrac * path.totalLen : 0;
+
+      return {
+        status: startActive ? 'driving' : 'waiting',
+        dist: startDist,
+        direction: car.initialDirection,
+        waitRemaining: startActive
+          ? 0
+          : initialProfile.spawnWaitMinSec +
+            (car.seed % 100) * 0.01 * (initialProfile.spawnWaitMaxSec - initialProfile.spawnWaitMinSec),
+        opacity: startActive ? 1 : 0,
+        retiring: false
+      };
+    });
+
+    // Resolve DOM refs once into a flat array (avoids Map.get() lookups inside rAF)
+    const carEls: Array<HTMLDivElement | null> = cars.map(
+      (car) => carRefsMap.current.get(car.id) ?? null
+    );
+    const lastHidden = new Uint8Array(cars.length);
+
+    let lastNow = performance.now();
 
     const tick = (now: number) => {
       if (isDisposed) return;
 
-      const tSec = now * 0.001;
+      const rawDt = (now - lastNow) * 0.001;
+      lastNow = now;
+      const dt = Math.min(0.05, Math.max(0.001, rawDt));
 
+      // Read live time-of-day traffic density (zero React setState)
+      const profile = compact
+        ? { densityFactor: 1, maxActiveCap: null, spawnWaitMinSec: 0.45, spawnWaitMaxSec: 0.9, isRushHour: false }
+        : getLiveTrafficProfile();
+
+      const rawTarget = Math.round(cars.length * profile.densityFactor);
+      const desiredActiveCount = compact
+        ? cars.length
+        : Math.max(
+            1,
+            Math.min(
+              cars.length,
+              profile.maxActiveCap !== null ? Math.min(rawTarget, profile.maxActiveCap) : rawTarget
+            )
+          );
+
+      let activeDrivingCount = 0;
+      for (let i = 0; i < simStates.length; i++) {
+        if (simStates[i].status === 'driving' && !simStates[i].retiring) {
+          activeDrivingCount++;
+        }
+      }
+
+      // Gracefully fade out excess closed-loop cars when transitioning to quieter Night/Midnight
+      if (!compact && activeDrivingCount > desiredActiveCount) {
+        for (let i = cars.length - 1; i >= 0 && activeDrivingCount > desiredActiveCount; i--) {
+          const st = simStates[i];
+          const path = paths[cars[i].pathIndex];
+          if (st.status === 'driving' && !st.retiring && path?.isLoop) {
+            st.retiring = true;
+            activeDrivingCount--;
+          }
+        }
+      }
+
+      // Single O(N) free-flow pass: advance each car independently & update its DOM transform directly
       for (let i = 0; i < cars.length; i++) {
         const car = cars[i];
-        const el = carRefsMap.current.get(car.id);
-        if (!el) continue;
-
+        const st = simStates[i];
         const path = paths[car.pathIndex];
-        if (!path || path.totalLen <= 0) continue;
+        const el = carEls[i];
+        if (!path || path.totalLen <= 0 || !el) continue;
 
-        const totalTime = tSec + car.phaseOffset;
-        const tCycle = ((totalTime % car.cycleDuration) + car.cycleDuration) % car.cycleDuration;
+        if (st.status === 'waiting') {
+          if (lastHidden[i] !== 1) {
+            el.style.opacity = '0';
+            lastHidden[i] = 1;
+          }
 
-        if (!path.isLoop && tCycle > car.travelDuration) {
-          el.style.opacity = '0';
+          if (activeDrivingCount < desiredActiveCount) {
+            st.waitRemaining -= dt;
+            if (st.waitRemaining <= 0) {
+              st.status = 'driving';
+              st.direction = path.isLoop
+                ? car.initialDirection
+                : Math.random() < 0.55
+                ? car.initialDirection
+                : car.initialDirection === 1
+                ? -1
+                : 1;
+              st.dist = 0;
+              st.retiring = false;
+              st.opacity = 0.02;
+              activeDrivingCount++;
+            }
+          }
           continue;
         }
 
-        const cycleCount = Math.floor(totalTime / car.cycleDuration);
-        const isReverse = path.isLoop
-          ? car.direction === -1
-          : (cycleCount % 2 === 1 ? car.direction === 1 : car.direction === -1);
+        // Advance smoothly at constant cruising speed (cars pass/overtake freely without blocking)
+        st.dist += car.baseSpeed * dt;
 
-        const progress = path.isLoop
-          ? (tCycle / car.travelDuration) % 1
-          : Math.min(1, tCycle / car.travelDuration);
-
-        const dist = progress * path.totalLen;
-        const sample = samplePolyline(path, dist, isReverse);
-
-        // Right-hand lane offset beside cream dashed centerline
-        const lx = sample.x - Math.sin(sample.angleRad) * laneOffset;
-        const ly = sample.y + Math.cos(sample.angleRad) * laneOffset;
-        const deg = (sample.angleRad * 180) / Math.PI;
-
-        const leftPct = (lx / totalW) * 100;
-        const topPct = (ly / totalH) * 100;
-
-        el.style.left = `${leftPct.toFixed(3)}%`;
-        el.style.top = `${topPct.toFixed(3)}%`;
-        el.style.transform = `translate(-50%, -50%) rotate(${deg.toFixed(1)}deg)`;
+        if (st.retiring) {
+          st.opacity = Math.max(0, st.opacity - dt * 0.72);
+          if (st.opacity <= 0.01) {
+            st.status = 'waiting';
+            st.retiring = false;
+            st.waitRemaining =
+              profile.spawnWaitMinSec +
+              Math.random() * (profile.spawnWaitMaxSec - profile.spawnWaitMinSec);
+            if (lastHidden[i] !== 1) {
+              el.style.opacity = '0';
+              lastHidden[i] = 1;
+            }
+            continue;
+          }
+        }
 
         if (path.isLoop) {
-          el.style.opacity = '1';
-        } else {
-          const edgeFade = Math.min(0.11, 12 / Math.max(40, path.totalLen));
-          let alpha = 1;
-          if (progress < edgeFade) {
-            alpha = progress / edgeFade;
-          } else if (progress > 1 - edgeFade) {
-            alpha = (1 - progress) / edgeFade;
+          if (st.dist >= path.totalLen) {
+            st.dist -= path.totalLen;
           }
-          el.style.opacity = Math.max(0, Math.min(1, alpha)).toFixed(2);
+          if (!st.retiring && st.opacity < 1) {
+            st.opacity = Math.min(1, st.opacity + dt * 1.4);
+          }
+        } else {
+          if (st.dist >= path.totalLen) {
+            st.status = 'waiting';
+            st.dist = 0;
+            st.opacity = 0;
+            st.retiring = false;
+            st.waitRemaining =
+              profile.spawnWaitMinSec +
+              Math.random() * (profile.spawnWaitMaxSec - profile.spawnWaitMinSec);
+            if (lastHidden[i] !== 1) {
+              el.style.opacity = '0';
+              lastHidden[i] = 1;
+            }
+            continue;
+          }
+
+          const fadeDist = Math.min(18, path.totalLen * 0.14);
+          let edgeAlpha = 1;
+          if (st.dist < fadeDist) {
+            edgeAlpha = st.dist / Math.max(1, fadeDist);
+          } else if (st.dist > path.totalLen - fadeDist) {
+            edgeAlpha = (path.totalLen - st.dist) / Math.max(1, fadeDist);
+          }
+          st.opacity = st.retiring
+            ? Math.min(st.opacity, Math.max(0, edgeAlpha))
+            : Math.max(0, Math.min(1, edgeAlpha));
         }
+
+        const sample = samplePolyline(path, st.dist, st.direction === -1);
+        const worldX = sample.x - Math.sin(sample.angleRad) * laneOffset;
+        const worldY = sample.y + Math.cos(sample.angleRad) * laneOffset;
+
+        lastHidden[i] = 0;
+        const deg = (sample.angleRad * 180) / Math.PI;
+        const leftPct = (worldX / totalW) * 100;
+        const topPct = (worldY / totalH) * 100;
+
+        el.style.left = `${leftPct.toFixed(2)}%`;
+        el.style.top = `${topPct.toFixed(2)}%`;
+        el.style.transform = `translate(-50%, -50%) rotate(${deg.toFixed(1)}deg)`;
+        el.style.opacity = st.opacity.toFixed(2);
       }
 
       rafId = requestAnimationFrame(tick);
@@ -496,23 +637,66 @@ export const CityTrafficOverlay: React.FC<CityTrafficOverlayProps> = ({
             height: `${carHeightPx}px`
           }}
         >
-          {/* Warm Subtle Headlight Glow Cone */}
+          {/* Outer Wide Conical Headlight Beam Illuminating Dark Night Road */}
           <div
-            className="absolute top-1/2 -translate-y-1/2 rounded-r-full pointer-events-none"
+            className="absolute top-1/2 -translate-y-1/2 pointer-events-none"
+            style={{
+              right: compact ? '-17px' : '-35px',
+              width: compact ? '18px' : '36px',
+              height: compact ? '12px' : '23px',
+              opacity: 'var(--car-headlight-opacity, 0)',
+              clipPath: 'polygon(0% 34%, 100% 0%, 100% 100%, 0% 66%)',
+              background:
+                'linear-gradient(90deg, rgba(255,250,204,0.82) 0%, rgba(255,236,148,0.44) 44%, rgba(255,220,112,0.14) 76%, rgba(255,214,100,0) 100%)'
+            }}
+          />
+
+          {/* Crisp Bright Inner Conical Headlight Core Beam */}
+          <div
+            className="absolute top-1/2 -translate-y-1/2 pointer-events-none"
+            style={{
+              right: compact ? '-11px' : '-22px',
+              width: compact ? '12px' : '23px',
+              height: compact ? '7px' : '13px',
+              opacity: 'var(--car-headlight-opacity, 0)',
+              clipPath: 'polygon(0% 22%, 100% 6%, 100% 94%, 0% 78%)',
+              background:
+                'linear-gradient(90deg, rgba(255,254,230,0.98) 0%, rgba(255,244,178,0.62) 52%, rgba(255,232,140,0) 100%)'
+            }}
+          />
+
+          {/* Radiant Warm Headlight Source Halo at Night */}
+          <div
+            className="absolute top-1/2 -translate-y-1/2 rounded-full pointer-events-none"
             style={{
               right: compact ? '-4px' : '-6px',
-              width: compact ? '5px' : '7px',
-              height: compact ? '7px' : '10px',
-              background: 'radial-gradient(ellipse at left, rgba(255,244,196,0.65) 0%, rgba(255,244,196,0) 85%)'
+              width: compact ? '7px' : '12px',
+              height: compact ? '8px' : '14px',
+              opacity: 'var(--car-headlight-opacity, 0)',
+              background:
+                'radial-gradient(circle, rgba(255,252,218,0.98) 0%, rgba(255,236,146,0.45) 52%, rgba(255,226,120,0) 85%)'
+            }}
+          />
+
+          {/* Vivid Glowing Red Taillight Aura at Night */}
+          <div
+            className="absolute top-1/2 -translate-y-1/2 rounded-full pointer-events-none"
+            style={{
+              left: compact ? '-5px' : '-8px',
+              width: compact ? '7px' : '12px',
+              height: compact ? '8px' : '14px',
+              opacity: 'var(--car-headlight-opacity, 0)',
+              background:
+                'radial-gradient(circle, rgba(255,74,74,0.9) 0%, rgba(240,48,58,0.42) 50%, rgba(235,44,54,0) 85%)'
             }}
           />
 
           {/* 2.5D Pastel Car Chassis */}
           <div
-            className="relative w-full h-full rounded-[3px] border border-[#3f474f]/80"
+            className="relative w-full h-full rounded-[3px] border border-[#2d343d]/85"
             style={{
               backgroundColor: car.color,
-              boxShadow: '0 2px 3px rgba(30, 36, 43, 0.36), inset 0 1px 0 rgba(255,255,255,0.45)'
+              boxShadow: '0 2px 3px rgba(10, 14, 28, 0.42)'
             }}
           >
             {/* Front & Rear Tinted Windshields */}
@@ -531,29 +715,74 @@ export const CityTrafficOverlay: React.FC<CityTrafficOverlayProps> = ({
               style={{
                 left: '28%',
                 right: '34%',
-                backgroundColor: car.roofColor,
-                boxShadow: '0 1px 1px rgba(41,37,36,0.18)'
+                backgroundColor: car.roofColor
               }}
             />
 
             {/* Front Headlights */}
             <div
               className="absolute rounded-[1px]"
-              style={{ right: '-0.5px', top: '14%', width: '2px', height: '22%', backgroundColor: '#fff9db' }}
+              style={{ right: '-0.5px', top: '14%', width: '2px', height: '22%', backgroundColor: '#f5efe0' }}
             />
             <div
               className="absolute rounded-[1px]"
-              style={{ right: '-0.5px', bottom: '14%', width: '2px', height: '22%', backgroundColor: '#fff9db' }}
+              style={{ right: '-0.5px', bottom: '14%', width: '2px', height: '22%', backgroundColor: '#f5efe0' }}
+            />
+            {/* Luminous Headlight Lenses at Sunset/Night */}
+            <div
+              className="absolute rounded-[1px]"
+              style={{
+                right: '-0.8px',
+                top: '13%',
+                width: '2.5px',
+                height: '24%',
+                backgroundColor: '#fffde6',
+                opacity: 'var(--car-headlight-opacity, 0)'
+              }}
+            />
+            <div
+              className="absolute rounded-[1px]"
+              style={{
+                right: '-0.8px',
+                bottom: '13%',
+                width: '2.5px',
+                height: '24%',
+                backgroundColor: '#fffde6',
+                opacity: 'var(--car-headlight-opacity, 0)'
+              }}
             />
 
             {/* Rear Taillights */}
             <div
               className="absolute rounded-[1px]"
-              style={{ left: '-0.5px', top: '16%', width: '1.5px', height: '20%', backgroundColor: '#d96b6b' }}
+              style={{ left: '-0.5px', top: '16%', width: '1.6px', height: '21%', backgroundColor: '#d96b6b' }}
             />
             <div
               className="absolute rounded-[1px]"
-              style={{ left: '-0.5px', bottom: '16%', width: '1.5px', height: '20%', backgroundColor: '#d96b6b' }}
+              style={{ left: '-0.5px', bottom: '16%', width: '1.6px', height: '21%', backgroundColor: '#d96b6b' }}
+            />
+            {/* Vivid Glowing Red Taillight Lenses at Night */}
+            <div
+              className="absolute rounded-[1px]"
+              style={{
+                left: '-0.8px',
+                top: '15%',
+                width: '2px',
+                height: '23%',
+                backgroundColor: '#ff5252',
+                opacity: 'var(--car-headlight-opacity, 0)'
+              }}
+            />
+            <div
+              className="absolute rounded-[1px]"
+              style={{
+                left: '-0.8px',
+                bottom: '15%',
+                width: '2px',
+                height: '23%',
+                backgroundColor: '#ff5252',
+                opacity: 'var(--car-headlight-opacity, 0)'
+              }}
             />
           </div>
         </div>
@@ -561,3 +790,4 @@ export const CityTrafficOverlay: React.FC<CityTrafficOverlayProps> = ({
     </div>
   );
 };
+

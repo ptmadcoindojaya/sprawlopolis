@@ -352,14 +352,21 @@ export const CityGridBoard: React.FC<CityGridBoardProps> = ({
                     <div
                       key={key}
                       data-grid-cell="true"
-                      style={{ width: CELL_SIZE, height: CELL_SIZE }}
-                      className={`relative overflow-visible border border-[#d6ccb8]/55 flex items-center justify-center transition-colors duration-150 ${
+                      style={{
+                        width: CELL_SIZE,
+                        height: CELL_SIZE,
+                        backgroundColor: 'var(--empty-cell-bg, rgba(174, 164, 142, 0.47))',
+                        borderColor: placedBlock
+                          ? 'transparent'
+                          : 'var(--empty-grid-border, rgba(112, 102, 84, 0.35))'
+                      }}
+                      className={`relative overflow-visible border flex items-center justify-center transition-colors duration-150 ${
                         isHoverTarget ? 'z-30' : ''
                       } ${
                         placedBlock
                           ? ''
                           : isMyTurn
-                          ? 'hover:bg-[#fbf8f2]/50'
+                          ? 'hover:brightness-105'
                           : ''
                       }`}
                       onMouseEnter={() => isMyTurn && selectedCard && setHoverPos({ x, y })}
@@ -373,7 +380,10 @@ export const CityGridBoard: React.FC<CityGridBoardProps> = ({
                       {!placedBlock && (
                         <>
                           <EmptyCellTerrain x={x} y={y} />
-                          <span className="absolute top-1 left-1.5 z-[1] text-[9px] font-mono text-[#8d8271]/70 pointer-events-none tabular-nums">
+                          <span
+                            className="absolute top-1 left-1.5 z-[1] text-[9px] font-mono pointer-events-none tabular-nums"
+                            style={{ color: 'var(--coord-text-color, rgba(141, 130, 113, 0.7))' }}
+                          >
                             {x},{y}
                           </span>
                         </>
@@ -391,6 +401,13 @@ export const CityGridBoard: React.FC<CityGridBoardProps> = ({
                       {/* Render Floating 2.5D Hover Preview Overlay */}
                       {isHoverTarget && previewBlock && (
                         <div
+                          style={
+                            {
+                              '--city-surface-brightness': '0.92',
+                              '--city-surface-saturate': '1.08',
+                              '--city-surface-contrast': '1.02'
+                            } as React.CSSProperties
+                          }
                           className={`absolute inset-0 z-30 pointer-events-none overflow-visible transition-transform duration-150 -translate-y-1.5 scale-[1.03] rounded-xl p-[2px] ${
                             isValidPlacementArea
                               ? 'bg-[#63a375]/25 ring-2 ring-[#5e9a6b]'
@@ -512,22 +529,32 @@ const BlockCell: React.FC<BlockCellProps> = ({ block, size, isGhost, isValidGhos
   return (
     <div
       style={{ width: size, height: size }}
-      className={`relative p-[2px] flex items-center justify-center pointer-events-none overflow-visible ${
+      className={`relative flex items-center justify-center pointer-events-none overflow-visible ${
+        isGhost ? 'p-[2px]' : 'p-[0.5px]'
+      } ${
         isSettling ? 'tile-land-settle' : ''
       }`}
     >
       {/* Clipped 2.5D Ground Tile, Roads & Base Diorama Layer (z-[5] below traffic z-[12]) */}
       <div
-        className={`relative z-[5] w-full h-full rounded-[10px] overflow-hidden transition-transform duration-150 ${
-          zoneInfo ? `${zoneInfo.bg} ${zoneInfo.text}` : 'bg-[#d8c39e] text-[#292524]'
+        className={`relative z-[5] w-full h-full overflow-hidden transition-transform duration-150 ${
+          isGhost ? 'rounded-[10px]' : 'rounded-[5px]'
+        } ${
+          zoneInfo ? zoneInfo.text : 'text-[#292524]'
         } ${
           isGhost
             ? `tile-25d-floating ${isValidGhost ? 'opacity-95' : 'opacity-80 saturate-75'}`
             : isStacked
-            ? 'tile-25d-elevated -translate-y-[1px]'
+            ? 'tile-25d-elevated -translate-y-[0.5px]'
             : 'tile-25d'
         }`}
       >
+        {/* Saturation-preserving night-lit ground surface (keeps emissive lamps/windows above at 100% brightness) */}
+        <div
+          className={`absolute inset-0 rounded-[inherit] pointer-events-none city-night-surface ${
+            zoneInfo ? zoneInfo.bg : 'bg-[#d8c39e]'
+          }`}
+        />
         <BlockDioramaArt
           cardId={block.cardId}
           blockIndex={canonicalBlockIndex}
@@ -540,13 +567,15 @@ const BlockCell: React.FC<BlockCellProps> = ({ block, size, isGhost, isValidGhos
 
       {/* 2.5D Pop-Out Hero Elements (z-[20] above traffic z-[12] for authentic 2.5D depth) */}
       <div
-        className={`absolute inset-[2px] pointer-events-none overflow-visible z-[20] transition-transform duration-150 ${
+        className={`absolute pointer-events-none overflow-visible z-[20] transition-transform duration-150 ${
+          isGhost ? 'inset-[2px]' : 'inset-[0.5px]'
+        } ${
           isGhost
             ? isValidGhost
               ? 'opacity-95'
               : 'opacity-80 saturate-75'
             : isStacked
-            ? '-translate-y-[1px]'
+            ? '-translate-y-[0.5px]'
             : ''
         }`}
       >

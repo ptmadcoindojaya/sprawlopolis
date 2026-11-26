@@ -27,6 +27,7 @@ import { XlsImportModal } from './components/XlsImportModal';
 import { GameOverModal } from './components/GameOverModal';
 import { LobbyScreen } from './components/LobbyScreen';
 import { CardGalleryModal } from './components/CardGalleryModal';
+import { SkyAtmosphereOverlay } from './components/SkyAtmosphereOverlay';
 
 import {
   multiplayerSync,
@@ -83,6 +84,7 @@ export function App() {
   const prevHistoryLenRef = useRef<number>(0);
   const prevGameOverOpenRef = useRef<boolean>(false);
   const scoreSoundTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const boardAreaRef = useRef<HTMLElement>(null);
 
   // Client-Side Solo & PeerJS P2P Multiplayer State
   const [multiplayerState, setMultiplayerState] = useState<MultiplayerState>({
@@ -555,7 +557,7 @@ export function App() {
       />
 
       {/* Full-Screen Interactive City Board Area */}
-      <main className="w-full h-full flex-1 relative overflow-hidden">
+      <main ref={boardAreaRef} className="w-full h-full flex-1 relative overflow-hidden">
         <CityGridBoard
           grid={grid}
           selectedCard={selectedCardInHand}
@@ -564,6 +566,12 @@ export function App() {
             if (selectedHandIndex !== null) handleRotateCard(selectedHandIndex);
           }}
           isMyTurn={isMyTurn}
+        />
+
+        {/* Dynamic Playtime-Based Day/Night Atmosphere, Drifting Clouds & Non-Numeric Sun/Moon Arc */}
+        <SkyAtmosphereOverlay
+          isPaused={isLobbyOpen || isGameOverOpen}
+          targetRef={boardAreaRef}
         />
       </main>
 

@@ -403,7 +403,34 @@ export const CityTrafficOverlay: React.FC<CityTrafficOverlayProps> = ({
     return { paths: builtPaths, cars: builtCars };
   }, [grid, minX, minY, compact, cellW, cellH]);
 
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const overlaySizeRef = useRef({ w: totalW, h: totalH });
   const carRefsMap = useRef<Map<string, HTMLDivElement>>(new Map());
+
+  useEffect(() => {
+    const el = overlayRef.current;
+    if (!el) {
+      overlaySizeRef.current = { w: totalW, h: totalH };
+      return;
+    }
+
+    const syncSize = () => {
+      const w = el.clientWidth;
+      const h = el.clientHeight;
+      if (w > 0 && h > 0) {
+        overlaySizeRef.current = { w, h };
+      } else {
+        overlaySizeRef.current = { w: totalW, h: totalH };
+      }
+    };
+
+    syncSize();
+    if (typeof ResizeObserver !== 'undefined') {
+      const ro = new ResizeObserver(syncSize);
+      ro.observe(el);
+      return () => ro.disconnect();
+    }
+  }, [totalW, totalH, cars.length]);
 
   useEffect(() => {
     if (cars.length === 0) return;
@@ -452,6 +479,7 @@ export const CityTrafficOverlay: React.FC<CityTrafficOverlayProps> = ({
       (car) => carRefsMap.current.get(car.id) ?? null
     );
     const lastHidden = new Uint8Array(cars.length);
+    const lastOpacityStr: string[] = new Array(cars.length).fill('');
 
     let lastNow = performance.now();
 
@@ -508,6 +536,7 @@ export const CityTrafficOverlay: React.FC<CityTrafficOverlayProps> = ({
         if (st.status === 'waiting') {
           if (lastHidden[i] !== 1) {
             el.style.opacity = '0';
+            lastOpacityStr[i] = '0';
             lastHidden[i] = 1;
           }
 
@@ -544,6 +573,7 @@ export const CityTrafficOverlay: React.FC<CityTrafficOverlayProps> = ({
               Math.random() * (profile.spawnWaitMaxSec - profile.spawnWaitMinSec);
             if (lastHidden[i] !== 1) {
               el.style.opacity = '0';
+              lastOpacityStr[i] = '0';
               lastHidden[i] = 1;
             }
             continue;
@@ -568,6 +598,7 @@ export const CityTrafficOverlay: React.FC<CityTrafficOverlayProps> = ({
               Math.random() * (profile.spawnWaitMaxSec - profile.spawnWaitMinSec);
             if (lastHidden[i] !== 1) {
               el.style.opacity = '0';
+              lastOpacityStr[i] = '0';
               lastHidden[i] = 1;
             }
             continue;
@@ -591,13 +622,16 @@ export const CityTrafficOverlay: React.FC<CityTrafficOverlayProps> = ({
 
         lastHidden[i] = 0;
         const deg = (sample.angleRad * 180) / Math.PI;
-        const leftPct = (worldX / totalW) * 100;
-        const topPct = (worldY / totalH) * 100;
+        const px = (worldX / totalW) * overlaySizeRef.current.w;
+        const py = (worldY / totalH) * overlaySizeRef.current.h;
 
-        el.style.left = `${leftPct.toFixed(2)}%`;
-        el.style.top = `${topPct.toFixed(2)}%`;
-        el.style.transform = `translate(-50%, -50%) rotate(${deg.toFixed(1)}deg)`;
-        el.style.opacity = st.opacity.toFixed(2);
+        // Pure GPU compositor transform (zero CSS left/top layout recalculation)
+        el.style.transform = `translate3d(${px.toFixed(1)}px, ${py.toFixed(1)}px, 0) translate(-50%, -50%) rotate(${deg.toFixed(1)}deg)`;
+        const opStr = st.opacity.toFixed(2);
+        if (lastOpacityStr[i] !== opStr) {
+          el.style.opacity = opStr;
+          lastOpacityStr[i] = opStr;
+        }
       }
 
       rafId = requestAnimationFrame(tick);
@@ -618,6 +652,7 @@ export const CityTrafficOverlay: React.FC<CityTrafficOverlayProps> = ({
 
   return (
     <div
+      ref={overlayRef}
       className={`absolute inset-0 w-full h-full pointer-events-none overflow-visible ${className}`}
       aria-hidden="true"
     >
@@ -631,50 +666,23 @@ export const CityTrafficOverlay: React.FC<CityTrafficOverlayProps> = ({
               carRefsMap.current.delete(car.id);
             }
           }}
-          className="absolute pointer-events-none will-change-transform opacity-0"
+          className="absolute left-0 top-0 pointer-events-none will-change-transform opacity-0"
           style={{
             width: `${carWidthPx}px`,
             height: `${carHeightPx}px`
           }}
         >
-          {/* Outer Wide Conical Headlight Beam Illuminating Dark Night Road */}
+          {/* Single Lightweight Conical Headlight Beam Illuminating Dark Night Road */}
           <div
             className="absolute top-1/2 -translate-y-1/2 pointer-events-none"
             style={{
               right: compact ? '-17px' : '-35px',
-              width: compact ? '18px' : '36px',
+              width: compact ? '19px' : '37px',
               height: compact ? '12px' : '23px',
               opacity: 'var(--car-headlight-opacity, 0)',
-              clipPath: 'polygon(0% 34%, 100% 0%, 100% 100%, 0% 66%)',
+              clipPath: 'polygon(0% 30%, 100% 0%, 100% 100%, 0% 70%)',
               background:
-                'linear-gradient(90deg, rgba(255,250,204,0.82) 0%, rgba(255,236,148,0.44) 44%, rgba(255,220,112,0.14) 76%, rgba(255,214,100,0) 100%)'
-            }}
-          />
-
-          {/* Crisp Bright Inner Conical Headlight Core Beam */}
-          <div
-            className="absolute top-1/2 -translate-y-1/2 pointer-events-none"
-            style={{
-              right: compact ? '-11px' : '-22px',
-              width: compact ? '12px' : '23px',
-              height: compact ? '7px' : '13px',
-              opacity: 'var(--car-headlight-opacity, 0)',
-              clipPath: 'polygon(0% 22%, 100% 6%, 100% 94%, 0% 78%)',
-              background:
-                'linear-gradient(90deg, rgba(255,254,230,0.98) 0%, rgba(255,244,178,0.62) 52%, rgba(255,232,140,0) 100%)'
-            }}
-          />
-
-          {/* Radiant Warm Headlight Source Halo at Night */}
-          <div
-            className="absolute top-1/2 -translate-y-1/2 rounded-full pointer-events-none"
-            style={{
-              right: compact ? '-4px' : '-6px',
-              width: compact ? '7px' : '12px',
-              height: compact ? '8px' : '14px',
-              opacity: 'var(--car-headlight-opacity, 0)',
-              background:
-                'radial-gradient(circle, rgba(255,252,218,0.98) 0%, rgba(255,236,146,0.45) 52%, rgba(255,226,120,0) 85%)'
+                'linear-gradient(90deg, rgba(255,254,224,0.96) 0%, rgba(255,244,174,0.72) 24%, rgba(255,228,128,0.34) 56%, rgba(255,214,100,0) 100%)'
             }}
           />
 

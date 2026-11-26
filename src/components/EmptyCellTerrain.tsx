@@ -33,8 +33,7 @@ export const EmptyCellTerrain: React.FC<EmptyCellTerrainProps> = React.memo(({ x
       viewBox="0 0 100 100"
       className="absolute inset-0 w-full h-full pointer-events-none select-none"
       style={{
-        opacity: 'var(--empty-terrain-opacity, 0.56)',
-        filter: 'brightness(var(--empty-terrain-brightness, 1))'
+        opacity: 'var(--empty-terrain-opacity, 0.56)'
       }}
       aria-hidden="true"
     >

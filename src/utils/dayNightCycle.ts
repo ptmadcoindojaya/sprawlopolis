@@ -16,21 +16,16 @@ export interface DayNightSnapshot {
   carHeadlightOpacity: number;
   // Atmospheric screen/board lighting
   ambientTintRgba: string;
+  ambientTintAlpha: number;
   ambientGlowCss: string;
   boardBackdropBg: string;
-  dayTabletopGlowOpacity: number;
-  nightVignetteOpacity: number;
   coordTextColor: string;
   emptyCellBg: string;
   emptyGridBorder: string;
   emptyTerrainOpacity: number;
-  emptyTerrainBrightness: number;
-  // Saturation-preserving city block lighting & ambient pop-out depth
-  citySurfaceBrightness: number;
-  citySurfaceSaturate: number;
-  citySurfaceContrast: number;
-  cityPopoutShadowAlpha: number;
-  cityNightRimAlpha: number;
+  // Lightweight GPU-friendly city block night shading & rim (zero CSS filter)
+  cityTileShadeOpacity: number;
+  cityNightRimColor: string;
   // Cloud palette
   cloudColor: string;
   cloudShadowColor: string;
@@ -61,7 +56,7 @@ export interface TrafficProfile {
   /** Minimum & maximum seconds a waiting car pauses before entering the road */
   spawnWaitMinSec: number;
   spawnWaitMaxSec: number;
-  /** True during Morning & Sunset rush hours (more lively speed variation & occasional brief stops) */
+  /** True during Morning & Sunset rush hours */
   isRushHour: boolean;
 }
 
@@ -150,8 +145,6 @@ interface Keyframe {
   glowX: number; // %
   glowY: number; // %
   boardBackdropRgb: [number, number, number];
-  dayTabletopGlow: number;
-  nightVignette: number;
   cloudRgb: [number, number, number];
   cloudShadowRgb: [number, number, number];
   cloudOpacity: number;
@@ -167,25 +160,19 @@ interface Keyframe {
   emptyCellBg: ColorRGBA;
   emptyGridBorder: ColorRGBA;
   emptyTerrainOpacity: number;
-  emptyTerrainBrightness: number;
-  citySurfaceBrightness: number;
-  citySurfaceSaturate: number;
-  citySurfaceContrast: number;
-  cityPopoutShadowAlpha: number;
+  cityTileShadeOpacity: number;
   cityNightRimAlpha: number;
 }
 
 const KEYFRAMES: Keyframe[] = [
-  // 0.00: Pre-dawn / Sunrise edge (warm rose-apricot clearing out of twilight)
+  // 0.00: Pre-dawn / Sunrise edge
   {
     t: 0.0,
     tint: { r: 238, g: 176, b: 136, a: 0.08 },
-    glow: { r: 255, g: 192, b: 138, a: 0.2 },
+    glow: { r: 255, g: 192, b: 138, a: 0.18 },
     glowX: 16,
     glowY: 26,
     boardBackdropRgb: [198, 188, 178],
-    dayTabletopGlow: 0.55,
-    nightVignette: 0.22,
     cloudRgb: [255, 228, 208],
     cloudShadowRgb: [212, 178, 168],
     cloudOpacity: 0.84,
@@ -200,28 +187,22 @@ const KEYFRAMES: Keyframe[] = [
     coordRgba: { r: 96, g: 86, b: 74, a: 0.72 },
     emptyCellBg: { r: 150, g: 140, b: 130, a: 0.54 },
     emptyGridBorder: { r: 108, g: 98, b: 86, a: 0.34 },
-    emptyTerrainOpacity: 0.48,
-    emptyTerrainBrightness: 0.88,
-    citySurfaceBrightness: 0.9,
-    citySurfaceSaturate: 1.06,
-    citySurfaceContrast: 1.02,
-    cityPopoutShadowAlpha: 0.22,
-    cityNightRimAlpha: 0.06
+    emptyTerrainOpacity: 0.42,
+    cityTileShadeOpacity: 0.08,
+    cityNightRimAlpha: 0.05
   },
-  // 0.12: Cozy Bright Morning (warm peach-gold sunrise light)
+  // 0.12: Cozy Bright Morning
   {
     t: 0.12,
-    tint: { r: 255, g: 222, b: 174, a: 0.09 },
-    glow: { r: 255, g: 228, b: 168, a: 0.2 },
+    tint: { r: 255, g: 222, b: 174, a: 0.08 },
+    glow: { r: 255, g: 228, b: 168, a: 0.18 },
     glowX: 24,
     glowY: 18,
     boardBackdropRgb: [239, 233, 220],
-    dayTabletopGlow: 0.88,
-    nightVignette: 0.0,
     cloudRgb: [255, 250, 242],
     cloudShadowRgb: [236, 224, 208],
     cloudOpacity: 0.96,
-    windowOpacity: 0.04,
+    windowOpacity: 0.0,
     windowGlow: 0.0,
     lampOpacity: 0.0,
     headlightOpacity: 0.0,
@@ -233,23 +214,17 @@ const KEYFRAMES: Keyframe[] = [
     emptyCellBg: { r: 178, g: 168, b: 145, a: 0.45 },
     emptyGridBorder: { r: 116, g: 106, b: 88, a: 0.34 },
     emptyTerrainOpacity: 0.56,
-    emptyTerrainBrightness: 1.0,
-    citySurfaceBrightness: 1.0,
-    citySurfaceSaturate: 1.02,
-    citySurfaceContrast: 1.0,
-    cityPopoutShadowAlpha: 0.12,
+    cityTileShadeOpacity: 0.0,
     cityNightRimAlpha: 0.0
   },
   // 0.26: Clear Fresh Day entry
   {
     t: 0.26,
-    tint: { r: 255, g: 252, b: 244, a: 0.02 },
-    glow: { r: 255, g: 248, b: 224, a: 0.1 },
+    tint: { r: 255, g: 252, b: 244, a: 0.0 },
+    glow: { r: 255, g: 248, b: 224, a: 0.08 },
     glowX: 44,
     glowY: 10,
     boardBackdropRgb: [239, 233, 220],
-    dayTabletopGlow: 0.9,
-    nightVignette: 0.0,
     cloudRgb: [255, 253, 249],
     cloudShadowRgb: [228, 233, 238],
     cloudOpacity: 1.0,
@@ -265,23 +240,17 @@ const KEYFRAMES: Keyframe[] = [
     emptyCellBg: { r: 174, g: 164, b: 142, a: 0.47 },
     emptyGridBorder: { r: 112, g: 102, b: 84, a: 0.35 },
     emptyTerrainOpacity: 0.56,
-    emptyTerrainBrightness: 1.0,
-    citySurfaceBrightness: 1.0,
-    citySurfaceSaturate: 1.0,
-    citySurfaceContrast: 1.0,
-    cityPopoutShadowAlpha: 0.12,
+    cityTileShadeOpacity: 0.0,
     cityNightRimAlpha: 0.0
   },
   // 0.45: Bright Sunlit Midday
   {
     t: 0.45,
-    tint: { r: 255, g: 252, b: 246, a: 0.01 },
-    glow: { r: 255, g: 250, b: 230, a: 0.08 },
+    tint: { r: 255, g: 252, b: 246, a: 0.0 },
+    glow: { r: 255, g: 250, b: 230, a: 0.06 },
     glowX: 58,
     glowY: 10,
     boardBackdropRgb: [239, 233, 220],
-    dayTabletopGlow: 0.9,
-    nightVignette: 0.0,
     cloudRgb: [255, 253, 250],
     cloudShadowRgb: [226, 232, 238],
     cloudOpacity: 1.0,
@@ -297,23 +266,17 @@ const KEYFRAMES: Keyframe[] = [
     emptyCellBg: { r: 174, g: 164, b: 142, a: 0.47 },
     emptyGridBorder: { r: 112, g: 102, b: 84, a: 0.35 },
     emptyTerrainOpacity: 0.56,
-    emptyTerrainBrightness: 1.0,
-    citySurfaceBrightness: 1.0,
-    citySurfaceSaturate: 1.0,
-    citySurfaceContrast: 1.0,
-    cityPopoutShadowAlpha: 0.12,
+    cityTileShadeOpacity: 0.0,
     cityNightRimAlpha: 0.0
   },
   // 0.58: Golden Late Afternoon / Sunset Start
   {
     t: 0.58,
-    tint: { r: 244, g: 170, b: 96, a: 0.1 },
-    glow: { r: 255, g: 192, b: 114, a: 0.2 },
+    tint: { r: 244, g: 170, b: 96, a: 0.09 },
+    glow: { r: 255, g: 192, b: 114, a: 0.18 },
     glowX: 74,
     glowY: 20,
     boardBackdropRgb: [226, 212, 192],
-    dayTabletopGlow: 0.72,
-    nightVignette: 0.08,
     cloudRgb: [255, 232, 206],
     cloudShadowRgb: [226, 176, 146],
     cloudOpacity: 0.92,
@@ -328,30 +291,24 @@ const KEYFRAMES: Keyframe[] = [
     coordRgba: { r: 86, g: 71, b: 56, a: 0.76 },
     emptyCellBg: { r: 158, g: 140, b: 120, a: 0.52 },
     emptyGridBorder: { r: 106, g: 88, b: 70, a: 0.36 },
-    emptyTerrainOpacity: 0.5,
-    emptyTerrainBrightness: 0.94,
-    citySurfaceBrightness: 0.95,
-    citySurfaceSaturate: 1.08,
-    citySurfaceContrast: 1.02,
-    cityPopoutShadowAlpha: 0.18,
+    emptyTerrainOpacity: 0.48,
+    cityTileShadeOpacity: 0.04,
     cityNightRimAlpha: 0.02
   },
-  // 0.69: Cozy Golden-Amber Sunset Peak (streetlamps & windows warming up vividly)
+  // 0.69: Cozy Golden-Amber Sunset Peak
   {
     t: 0.69,
-    tint: { r: 224, g: 120, b: 72, a: 0.13 },
-    glow: { r: 255, g: 154, b: 88, a: 0.22 },
+    tint: { r: 224, g: 120, b: 72, a: 0.12 },
+    glow: { r: 255, g: 154, b: 88, a: 0.2 },
     glowX: 84,
     glowY: 30,
     boardBackdropRgb: [164, 142, 134],
-    dayTabletopGlow: 0.34,
-    nightVignette: 0.28,
     cloudRgb: [244, 192, 168],
     cloudShadowRgb: [182, 126, 122],
     cloudOpacity: 0.82,
-    windowOpacity: 0.76,
-    windowGlow: 0.74,
-    lampOpacity: 0.8,
+    windowOpacity: 0.78,
+    windowGlow: 0.76,
+    lampOpacity: 0.82,
     headlightOpacity: 0.64,
     skyTop: [112, 114, 168],
     skyBottom: [244, 164, 126],
@@ -360,24 +317,18 @@ const KEYFRAMES: Keyframe[] = [
     coordRgba: { r: 236, g: 214, b: 196, a: 0.58 },
     emptyCellBg: { r: 106, g: 92, b: 96, a: 0.68 },
     emptyGridBorder: { r: 162, g: 138, b: 136, a: 0.26 },
-    emptyTerrainOpacity: 0.38,
-    emptyTerrainBrightness: 0.72,
-    citySurfaceBrightness: 0.84,
-    citySurfaceSaturate: 1.14,
-    citySurfaceContrast: 1.04,
-    cityPopoutShadowAlpha: 0.34,
+    emptyTerrainOpacity: 0.32,
+    cityTileShadeOpacity: 0.16,
     cityNightRimAlpha: 0.08
   },
-  // 0.78: Twilight Dusk -> Rich Midnight Night Entry (zero pale fog, deep navy empty cells, radiant lights)
+  // 0.78: Twilight Dusk -> Rich Midnight Night Entry (zero fullscreen fog, deep navy outskirts)
   {
     t: 0.78,
-    tint: { r: 12, g: 20, b: 44, a: 0.03 },
-    glow: { r: 78, g: 112, b: 196, a: 0.06 },
+    tint: { r: 10, g: 16, b: 36, a: 0.0 },
+    glow: { r: 78, g: 112, b: 196, a: 0.0 },
     glowX: 30,
     glowY: 22,
     boardBackdropRgb: [20, 27, 46],
-    dayTabletopGlow: 0.0,
-    nightVignette: 0.68,
     cloudRgb: [52, 66, 104],
     cloudShadowRgb: [30, 40, 70],
     cloudOpacity: 0.44,
@@ -392,24 +343,18 @@ const KEYFRAMES: Keyframe[] = [
     coordRgba: { r: 158, g: 178, b: 220, a: 0.44 },
     emptyCellBg: { r: 24, g: 31, b: 52, a: 0.94 },
     emptyGridBorder: { r: 118, g: 142, b: 196, a: 0.18 },
-    emptyTerrainOpacity: 0.22,
-    emptyTerrainBrightness: 0.44,
-    citySurfaceBrightness: 0.7,
-    citySurfaceSaturate: 1.18,
-    citySurfaceContrast: 1.06,
-    cityPopoutShadowAlpha: 0.56,
-    cityNightRimAlpha: 0.2
+    emptyTerrainOpacity: 0.14,
+    cityTileShadeOpacity: 0.3,
+    cityNightRimAlpha: 0.22
   },
-  // 0.88: Deep Cozy Starry Midnight (deep #161c2e outskirts, jewel-toned pop-out city, 100% crisp glowing lights)
+  // 0.88: Deep Cozy Starry Midnight (deep #161c2e outskirts, 0 fullscreen overdraw, radiant warm lights)
   {
     t: 0.88,
     tint: { r: 10, g: 16, b: 36, a: 0.0 },
-    glow: { r: 84, g: 118, b: 204, a: 0.05 },
+    glow: { r: 84, g: 118, b: 204, a: 0.0 },
     glowX: 52,
     glowY: 16,
     boardBackdropRgb: [16, 22, 38],
-    dayTabletopGlow: 0.0,
-    nightVignette: 0.78,
     cloudRgb: [36, 48, 82],
     cloudShadowRgb: [22, 30, 56],
     cloudOpacity: 0.38,
@@ -424,24 +369,18 @@ const KEYFRAMES: Keyframe[] = [
     coordRgba: { r: 164, g: 184, b: 226, a: 0.46 },
     emptyCellBg: { r: 22, g: 28, b: 46, a: 0.96 },
     emptyGridBorder: { r: 122, g: 148, b: 204, a: 0.19 },
-    emptyTerrainOpacity: 0.19,
-    emptyTerrainBrightness: 0.4,
-    citySurfaceBrightness: 0.65,
-    citySurfaceSaturate: 1.22,
-    citySurfaceContrast: 1.08,
-    cityPopoutShadowAlpha: 0.66,
-    cityNightRimAlpha: 0.24
+    emptyTerrainOpacity: 0.12,
+    cityTileShadeOpacity: 0.35,
+    cityNightRimAlpha: 0.26
   },
   // 0.96: Late Night softening gently toward Dawn
   {
     t: 0.96,
-    tint: { r: 28, g: 34, b: 68, a: 0.04 },
-    glow: { r: 214, g: 162, b: 148, a: 0.1 },
+    tint: { r: 28, g: 34, b: 68, a: 0.02 },
+    glow: { r: 214, g: 162, b: 148, a: 0.08 },
     glowX: 20,
     glowY: 28,
     boardBackdropRgb: [58, 66, 94],
-    dayTabletopGlow: 0.18,
-    nightVignette: 0.48,
     cloudRgb: [86, 94, 128],
     cloudShadowRgb: [56, 62, 92],
     cloudOpacity: 0.52,
@@ -456,24 +395,18 @@ const KEYFRAMES: Keyframe[] = [
     coordRgba: { r: 182, g: 194, b: 222, a: 0.52 },
     emptyCellBg: { r: 54, g: 62, b: 86, a: 0.82 },
     emptyGridBorder: { r: 136, g: 152, b: 190, a: 0.22 },
-    emptyTerrainOpacity: 0.3,
-    emptyTerrainBrightness: 0.62,
-    citySurfaceBrightness: 0.78,
-    citySurfaceSaturate: 1.12,
-    citySurfaceContrast: 1.04,
-    cityPopoutShadowAlpha: 0.44,
+    emptyTerrainOpacity: 0.22,
+    cityTileShadeOpacity: 0.22,
     cityNightRimAlpha: 0.14
   },
   // 1.00: Seamless wrap to 0.00
   {
     t: 1.0,
     tint: { r: 238, g: 176, b: 136, a: 0.08 },
-    glow: { r: 255, g: 192, b: 138, a: 0.2 },
+    glow: { r: 255, g: 192, b: 138, a: 0.18 },
     glowX: 16,
     glowY: 26,
     boardBackdropRgb: [198, 188, 178],
-    dayTabletopGlow: 0.55,
-    nightVignette: 0.22,
     cloudRgb: [255, 228, 208],
     cloudShadowRgb: [212, 178, 168],
     cloudOpacity: 0.84,
@@ -488,13 +421,9 @@ const KEYFRAMES: Keyframe[] = [
     coordRgba: { r: 96, g: 86, b: 74, a: 0.72 },
     emptyCellBg: { r: 150, g: 140, b: 130, a: 0.54 },
     emptyGridBorder: { r: 108, g: 98, b: 86, a: 0.34 },
-    emptyTerrainOpacity: 0.48,
-    emptyTerrainBrightness: 0.88,
-    citySurfaceBrightness: 0.9,
-    citySurfaceSaturate: 1.06,
-    citySurfaceContrast: 1.02,
-    cityPopoutShadowAlpha: 0.22,
-    cityNightRimAlpha: 0.06
+    emptyTerrainOpacity: 0.42,
+    cityTileShadeOpacity: 0.08,
+    cityNightRimAlpha: 0.05
   }
 ];
 
@@ -523,7 +452,7 @@ function lerpRgba(a: ColorRGBA, b: ColorRGBA, t: number): string {
   const g = Math.round(lerp(a.g, b.g, t));
   const bl = Math.round(lerp(a.b, b.b, t));
   const al = lerp(a.a, b.a, t);
-  return `rgba(${r}, ${g}, ${bl}, ${al.toFixed(3)})`;
+  return `rgba(${r}, ${g}, ${bl}, ${al.toFixed(2)})`;
 }
 
 export function getPhaseFromProgress(progress: number): { phase: TimePhase; label: string } {
@@ -537,7 +466,6 @@ export function getPhaseFromProgress(progress: number): { phase: TimePhase; labe
 export function computeDayNightSnapshot(rawProgress: number): DayNightSnapshot {
   const progress = ((rawProgress % 1) + 1) % 1;
 
-  // Locate surrounding keyframes
   let k0 = KEYFRAMES[0];
   let k1 = KEYFRAMES[1];
   for (let i = 0; i < KEYFRAMES.length - 1; i++) {
@@ -553,7 +481,6 @@ export function computeDayNightSnapshot(rawProgress: number): DayNightSnapshot {
 
   const { phase, label } = getPhaseFromProgress(progress);
 
-  // Sun travels from 0.00 -> 0.76 (Morning rise -> Day zenith -> Sunset set)
   const sunSpan = 0.76;
   const sunArcT = Math.max(0, Math.min(1, progress / sunSpan));
   let sunOpacity = 0;
@@ -563,7 +490,6 @@ export function computeDayNightSnapshot(rawProgress: number): DayNightSnapshot {
     sunOpacity = Math.min(fadeIn, fadeOut);
   }
 
-  // Sun color warms at Morning & Sunset, crisp butter-gold at Day
   let sunColor = '#ffe484';
   let sunHaloColor = 'rgba(255, 232, 148, 0.55)';
   if (progress < 0.22) {
@@ -574,7 +500,6 @@ export function computeDayNightSnapshot(rawProgress: number): DayNightSnapshot {
     sunHaloColor = 'rgba(255, 148, 92, 0.65)';
   }
 
-  // Crescent Moon travels from 0.74 -> 1.00 (rises as dusk falls, sets before morning)
   const moonStart = 0.74;
   const moonSpan = 1.0 - moonStart;
   const moonArcT =
@@ -591,8 +516,10 @@ export function computeDayNightSnapshot(rawProgress: number): DayNightSnapshot {
       ? Math.min(smoothstep((progress - 0.75) / 0.06), 1 - smoothstep((progress - 0.94) / 0.05))
       : 0;
 
-  const glowX = lerp(k0.glowX, k1.glowX, localT).toFixed(1);
-  const glowY = lerp(k0.glowY, k1.glowY, localT).toFixed(1);
+  const glowAlpha = lerp(k0.glow.a, k1.glow.a, localT);
+  const tintAlpha = lerp(k0.tint.a, k1.tint.a, localT);
+  const glowX = lerp(k0.glowX, k1.glowX, localT).toFixed(0);
+  const glowY = lerp(k0.glowY, k1.glowY, localT).toFixed(0);
   const glowCenter = lerpRgba(k0.glow, k1.glow, localT);
   const glowZero = `rgba(${Math.round(lerp(k0.glow.r, k1.glow.r, localT))}, ${Math.round(
     lerp(k0.glow.g, k1.glow.g, localT)
@@ -602,6 +529,7 @@ export function computeDayNightSnapshot(rawProgress: number): DayNightSnapshot {
   const skyBottom = lerpRgb(k0.skyBottom, k1.skyBottom, localT);
 
   const isDarkBadge = progress >= 0.73 && progress <= 0.97;
+  const rimAlpha = lerp(k0.cityNightRimAlpha, k1.cityNightRimAlpha, localT);
 
   return {
     progress,
@@ -612,20 +540,19 @@ export function computeDayNightSnapshot(rawProgress: number): DayNightSnapshot {
     cityLampOpacity: lerp(k0.lampOpacity, k1.lampOpacity, localT),
     carHeadlightOpacity: lerp(k0.headlightOpacity, k1.headlightOpacity, localT),
     ambientTintRgba: lerpRgba(k0.tint, k1.tint, localT),
-    ambientGlowCss: `radial-gradient(ellipse 68% 58% at ${glowX}% ${glowY}%, ${glowCenter} 0%, ${glowZero} 75%)`,
+    ambientTintAlpha: Math.max(tintAlpha, glowAlpha),
+    ambientGlowCss:
+      glowAlpha > 0.01
+        ? `radial-gradient(ellipse 68% 58% at ${glowX}% ${glowY}%, ${glowCenter} 0%, ${glowZero} 75%)`
+        : 'none',
     boardBackdropBg: lerpRgb(k0.boardBackdropRgb, k1.boardBackdropRgb, localT),
-    dayTabletopGlowOpacity: lerp(k0.dayTabletopGlow, k1.dayTabletopGlow, localT),
-    nightVignetteOpacity: lerp(k0.nightVignette, k1.nightVignette, localT),
     coordTextColor: lerpRgba(k0.coordRgba, k1.coordRgba, localT),
     emptyCellBg: lerpRgba(k0.emptyCellBg, k1.emptyCellBg, localT),
     emptyGridBorder: lerpRgba(k0.emptyGridBorder, k1.emptyGridBorder, localT),
     emptyTerrainOpacity: lerp(k0.emptyTerrainOpacity, k1.emptyTerrainOpacity, localT),
-    emptyTerrainBrightness: lerp(k0.emptyTerrainBrightness, k1.emptyTerrainBrightness, localT),
-    citySurfaceBrightness: lerp(k0.citySurfaceBrightness, k1.citySurfaceBrightness, localT),
-    citySurfaceSaturate: lerp(k0.citySurfaceSaturate, k1.citySurfaceSaturate, localT),
-    citySurfaceContrast: lerp(k0.citySurfaceContrast, k1.citySurfaceContrast, localT),
-    cityPopoutShadowAlpha: lerp(k0.cityPopoutShadowAlpha, k1.cityPopoutShadowAlpha, localT),
-    cityNightRimAlpha: lerp(k0.cityNightRimAlpha, k1.cityNightRimAlpha, localT),
+    cityTileShadeOpacity: lerp(k0.cityTileShadeOpacity, k1.cityTileShadeOpacity, localT),
+    cityNightRimColor:
+      rimAlpha > 0.01 ? `rgba(148, 176, 236, ${rimAlpha.toFixed(2)})` : 'transparent',
     cloudColor: lerpRgb(k0.cloudRgb, k1.cloudRgb, localT),
     cloudShadowColor: lerpRgb(k0.cloudShadowRgb, k1.cloudShadowRgb, localT),
     cloudOpacityScale: lerp(k0.cloudOpacity, k1.cloudOpacity, localT),

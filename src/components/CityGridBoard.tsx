@@ -360,13 +360,13 @@ export const CityGridBoard: React.FC<CityGridBoardProps> = ({
                           ? 'transparent'
                           : 'var(--empty-grid-border, rgba(112, 102, 84, 0.35))'
                       }}
-                      className={`relative overflow-visible border flex items-center justify-center transition-colors duration-150 ${
+                      className={`relative overflow-visible border flex items-center justify-center ${
                         isHoverTarget ? 'z-30' : ''
                       } ${
                         placedBlock
                           ? ''
                           : isMyTurn
-                          ? 'hover:brightness-105'
+                          ? 'hover:ring-1 hover:ring-inset hover:ring-[#fffdf9]/25'
                           : ''
                       }`}
                       onMouseEnter={() => isMyTurn && selectedCard && setHoverPos({ x, y })}
@@ -403,9 +403,7 @@ export const CityGridBoard: React.FC<CityGridBoardProps> = ({
                         <div
                           style={
                             {
-                              '--city-surface-brightness': '0.92',
-                              '--city-surface-saturate': '1.08',
-                              '--city-surface-contrast': '1.02'
+                              '--city-tile-shade': '0'
                             } as React.CSSProperties
                           }
                           className={`absolute inset-0 z-30 pointer-events-none overflow-visible transition-transform duration-150 -translate-y-1.5 scale-[1.03] rounded-xl p-[2px] ${
@@ -521,7 +519,7 @@ interface BlockCellProps {
   isSettling?: boolean;
 }
 
-const BlockCell: React.FC<BlockCellProps> = ({ block, size, isGhost, isValidGhost, isSettling }) => {
+const BlockCell: React.FC<BlockCellProps> = React.memo(({ block, size, isGhost, isValidGhost, isSettling }) => {
   const zoneInfo = ZONE_NAMES[block.zone];
   const isStacked = !isGhost && block.layer > 0;
   const canonicalBlockIndex = block.rotation === 180 ? 3 - block.blockIndex : block.blockIndex;
@@ -537,8 +535,13 @@ const BlockCell: React.FC<BlockCellProps> = ({ block, size, isGhost, isValidGhos
     >
       {/* Clipped 2.5D Ground Tile, Roads & Base Diorama Layer (z-[5] below traffic z-[12]) */}
       <div
-        className={`relative z-[5] w-full h-full overflow-hidden transition-transform duration-150 ${
+        style={{
+          borderColor: isGhost ? 'transparent' : 'var(--city-night-rim-color, transparent)'
+        }}
+        className={`relative z-[5] w-full h-full overflow-hidden border transition-transform duration-150 ${
           isGhost ? 'rounded-[10px]' : 'rounded-[5px]'
+        } ${
+          zoneInfo ? zoneInfo.bg : 'bg-[#d8c39e]'
         } ${
           zoneInfo ? zoneInfo.text : 'text-[#292524]'
         } ${
@@ -549,12 +552,6 @@ const BlockCell: React.FC<BlockCellProps> = ({ block, size, isGhost, isValidGhos
             : 'tile-25d'
         }`}
       >
-        {/* Saturation-preserving night-lit ground surface (keeps emissive lamps/windows above at 100% brightness) */}
-        <div
-          className={`absolute inset-0 rounded-[inherit] pointer-events-none city-night-surface ${
-            zoneInfo ? zoneInfo.bg : 'bg-[#d8c39e]'
-          }`}
-        />
         <BlockDioramaArt
           cardId={block.cardId}
           blockIndex={canonicalBlockIndex}
@@ -590,4 +587,4 @@ const BlockCell: React.FC<BlockCellProps> = ({ block, size, isGhost, isValidGhos
       </div>
     </div>
   );
-};
+});

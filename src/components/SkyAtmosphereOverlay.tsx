@@ -60,6 +60,74 @@ function pointOnSkyArc(t: number): { x: number; y: number } {
   };
 }
 
+/**
+ * Memoized static cloud silhouettes: colors & opacity scale flow through CSS custom properties
+ * on the parent wrapper, so the 10 clouds NEVER re-render in React during the day/night cycle.
+ */
+const StaticCloudLayer = React.memo(() => (
+  <>
+    {SKY_CLOUDS.map((cloud) => (
+      <div
+        key={cloud.id}
+        className={`absolute left-0 pointer-events-none ${
+          cloud.direction === 'ltr' ? 'cloud-drift-ltr' : 'cloud-drift-rtl'
+        }`}
+        style={{
+          top: `${cloud.topPct}%`,
+          width: `${cloud.widthPx}px`,
+          opacity: cloud.baseOpacity,
+          animationDuration: `${cloud.durationSec}s`,
+          animationDelay: `${cloud.delaySec}s`
+        }}
+      >
+        <svg viewBox="0 0 140 56" className="w-full h-auto overflow-visible">
+          {cloud.variant === 0 && (
+            <g>
+              <ellipse cx="70" cy="40" rx="50" ry="12" fill="var(--cloud-shadow, #e4e9ee)" opacity="0.52" />
+              <circle cx="38" cy="34" r="16" fill="var(--cloud-color, #fffdf9)" />
+              <circle cx="62" cy="24" r="22" fill="var(--cloud-color, #fffdf9)" />
+              <circle cx="88" cy="28" r="18" fill="var(--cloud-color, #fffdf9)" />
+              <circle cx="106" cy="36" r="13" fill="var(--cloud-color, #fffdf9)" />
+              <rect x="36" y="29" width="70" height="19" rx="9" fill="var(--cloud-color, #fffdf9)" />
+            </g>
+          )}
+          {cloud.variant === 1 && (
+            <g>
+              <ellipse cx="68" cy="39" rx="44" ry="10" fill="var(--cloud-shadow, #e4e9ee)" opacity="0.48" />
+              <circle cx="42" cy="33" r="14" fill="var(--cloud-color, #fffdf9)" />
+              <circle cx="66" cy="25" r="19" fill="var(--cloud-color, #fffdf9)" />
+              <circle cx="90" cy="33" r="14" fill="var(--cloud-color, #fffdf9)" />
+              <rect x="42" y="29" width="48" height="16" rx="8" fill="var(--cloud-color, #fffdf9)" />
+            </g>
+          )}
+          {cloud.variant === 2 && (
+            <g>
+              <ellipse cx="72" cy="41" rx="54" ry="11" fill="var(--cloud-shadow, #e4e9ee)" opacity="0.48" />
+              <circle cx="34" cy="36" r="14" fill="var(--cloud-color, #fffdf9)" />
+              <circle cx="56" cy="26" r="20" fill="var(--cloud-color, #fffdf9)" />
+              <circle cx="82" cy="23" r="21" fill="var(--cloud-color, #fffdf9)" />
+              <circle cx="106" cy="34" r="15" fill="var(--cloud-color, #fffdf9)" />
+              <rect x="34" y="30" width="72" height="18" rx="9" fill="var(--cloud-color, #fffdf9)" />
+            </g>
+          )}
+          {cloud.variant === 3 && (
+            <g>
+              <ellipse cx="52" cy="37" rx="30" ry="8" fill="var(--cloud-shadow, #e4e9ee)" opacity="0.45" />
+              <circle cx="38" cy="32" r="12" fill="var(--cloud-color, #fffdf9)" />
+              <circle cx="54" cy="26" r="15" fill="var(--cloud-color, #fffdf9)" />
+              <circle cx="69" cy="33" r="11" fill="var(--cloud-color, #fffdf9)" />
+              <rect x="38" y="28" width="31" height="14" rx="7" fill="var(--cloud-color, #fffdf9)" />
+              <circle cx="103" cy="23" r="9.5" fill="var(--cloud-color, #fffdf9)" opacity="0.88" />
+              <circle cx="114" cy="26" r="7.5" fill="var(--cloud-color, #fffdf9)" opacity="0.88" />
+            </g>
+          )}
+        </svg>
+      </div>
+    ))}
+  </>
+));
+StaticCloudLayer.displayName = 'StaticCloudLayer';
+
 export const SkyAtmosphereOverlay: React.FC<SkyAtmosphereOverlayProps> = ({
   isPaused,
   targetRef
@@ -70,65 +138,108 @@ export const SkyAtmosphereOverlay: React.FC<SkyAtmosphereOverlayProps> = ({
 
   const elapsedMsRef = useRef<number>(INITIAL_CYCLE_PROGRESS * FULL_CYCLE_DURATION_MS);
   const isPausedRef = useRef<boolean>(isPaused);
+  const tintRef = useRef<HTMLDivElement>(null);
+  const cloudsWrapperRef = useRef<HTMLDivElement>(null);
+  const lastCssCacheRef = useRef<Record<string, string>>({});
 
   useEffect(() => {
     isPausedRef.current = isPaused;
   }, [isPaused]);
 
-  // Apply CSS lighting custom properties directly to the city board container
-  // so 100+ BlockDioramaArt & CityTrafficOverlay elements respond smoothly with ZERO React re-renders
+  // Apply quantized CSS custom properties directly (skipping unchanged values to prevent style thrashing)
   const applyLightingVars = (snap: DayNightSnapshot) => {
     setLiveCycleProgress(snap.progress);
     const el = targetRef.current;
-    if (!el) return;
-    el.style.setProperty('--city-window-opacity', snap.cityWindowOpacity.toFixed(3));
-    el.style.setProperty('--city-window-glow', snap.cityWindowGlow.toFixed(3));
-    el.style.setProperty('--city-lamp-opacity', snap.cityLampOpacity.toFixed(3));
-    el.style.setProperty('--car-headlight-opacity', snap.carHeadlightOpacity.toFixed(3));
-    el.style.setProperty('--board-backdrop-bg', snap.boardBackdropBg);
-    el.style.setProperty('--day-tabletop-glow', snap.dayTabletopGlowOpacity.toFixed(3));
-    el.style.setProperty('--night-vignette-opacity', snap.nightVignetteOpacity.toFixed(3));
-    el.style.setProperty('--coord-text-color', snap.coordTextColor);
-    el.style.setProperty('--empty-cell-bg', snap.emptyCellBg);
-    el.style.setProperty('--empty-grid-border', snap.emptyGridBorder);
-    el.style.setProperty('--empty-terrain-opacity', snap.emptyTerrainOpacity.toFixed(3));
-    el.style.setProperty('--empty-terrain-brightness', snap.emptyTerrainBrightness.toFixed(3));
-    el.style.setProperty('--city-surface-brightness', snap.citySurfaceBrightness.toFixed(3));
-    el.style.setProperty('--city-surface-saturate', snap.citySurfaceSaturate.toFixed(3));
-    el.style.setProperty('--city-surface-contrast', snap.citySurfaceContrast.toFixed(3));
-    el.style.setProperty('--city-popout-shadow-alpha', snap.cityPopoutShadowAlpha.toFixed(3));
-    el.style.setProperty('--city-night-rim-alpha', snap.cityNightRimAlpha.toFixed(3));
-    // Soften tile top-edge bevel & sunlight sheen smoothly during Sunset/Night so tiles merge organically with the board
-    const nightFactor = snap.cityWindowOpacity;
-    const bevelAlpha = 0.36 - nightFactor * 0.22; // 0.36 day -> 0.14 night
-    const sunSheen = 0.13 - nightFactor * 0.12; // 0.13 day -> 0.01 night
-    el.style.setProperty('--tile-bevel-alpha', bevelAlpha.toFixed(3));
-    el.style.setProperty('--tile-sun-sheen', sunSheen.toFixed(3));
+    const cache = lastCssCacheRef.current;
+
+    const setVarIfChanged = (node: HTMLElement | null, key: string, value: string) => {
+      if (!node || cache[key] === value) return;
+      cache[key] = value;
+      node.style.setProperty(key, value);
+    };
+
+    if (el) {
+      setVarIfChanged(el, '--city-window-opacity', snap.cityWindowOpacity.toFixed(2));
+      setVarIfChanged(el, '--city-window-glow', snap.cityWindowGlow.toFixed(2));
+      setVarIfChanged(el, '--city-lamp-opacity', snap.cityLampOpacity.toFixed(2));
+      setVarIfChanged(el, '--car-headlight-opacity', snap.carHeadlightOpacity.toFixed(2));
+      setVarIfChanged(el, '--board-backdrop-bg', snap.boardBackdropBg);
+      setVarIfChanged(el, '--coord-text-color', snap.coordTextColor);
+      setVarIfChanged(el, '--empty-cell-bg', snap.emptyCellBg);
+      setVarIfChanged(el, '--empty-grid-border', snap.emptyGridBorder);
+      setVarIfChanged(el, '--empty-terrain-opacity', snap.emptyTerrainOpacity.toFixed(2));
+      setVarIfChanged(el, '--city-tile-shade', snap.cityTileShadeOpacity.toFixed(2));
+      setVarIfChanged(el, '--city-night-rim-color', snap.cityNightRimColor);
+      const sunSheen = 0.13 - snap.cityWindowOpacity * 0.12;
+      setVarIfChanged(el, '--tile-sun-sheen', sunSheen.toFixed(2));
+    }
+
+    // Update single atmospheric warm-hour tint directly via ref & hide completely at Night (zero fullscreen overdraw!)
+    const tintEl = tintRef.current;
+    if (tintEl) {
+      if (snap.ambientTintAlpha <= 0.01) {
+        if (cache['tintHidden'] !== '1') {
+          cache['tintHidden'] = '1';
+          tintEl.style.display = 'none';
+        }
+      } else {
+        if (cache['tintHidden'] !== '0') {
+          cache['tintHidden'] = '0';
+          tintEl.style.display = 'block';
+        }
+        if (cache['tintBg'] !== snap.ambientTintRgba) {
+          cache['tintBg'] = snap.ambientTintRgba;
+          tintEl.style.backgroundColor = snap.ambientTintRgba;
+        }
+        if (cache['tintGlow'] !== snap.ambientGlowCss) {
+          cache['tintGlow'] = snap.ambientGlowCss;
+          tintEl.style.backgroundImage = snap.ambientGlowCss;
+        }
+      }
+    }
+
+    // Update cloud palette directly via CSS variables on the single cloud wrapper (zero React re-renders)
+    const cloudsEl = cloudsWrapperRef.current;
+    if (cloudsEl) {
+      setVarIfChanged(cloudsEl, '--cloud-color', snap.cloudColor);
+      setVarIfChanged(cloudsEl, '--cloud-shadow', snap.cloudShadowColor);
+      const cloudOp = snap.cloudOpacityScale.toFixed(2);
+      if (cache['cloudOp'] !== cloudOp) {
+        cache['cloudOp'] = cloudOp;
+        cloudsEl.style.opacity = cloudOp;
+      }
+    }
   };
 
   useEffect(() => {
     // Initialize CSS vars immediately on mount
-    applyLightingVars(computeDayNightSnapshot(elapsedMsRef.current / FULL_CYCLE_DURATION_MS));
+    const initSnap = computeDayNightSnapshot(elapsedMsRef.current / FULL_CYCLE_DURATION_MS);
+    applyLightingVars(initSnap);
 
     let rafId = 0;
     let lastNow = performance.now();
-    let lastUiUpdate = 0;
+    let lastDomUpdate = 0;
+    let lastBadgeUpdate = 0;
 
     const tick = (now: number) => {
       const rawDt = now - lastNow;
       lastNow = now;
 
       if (!isPausedRef.current && rawDt > 0) {
-        // Clamp dt so returning from a background tab stays smooth
         const safeDt = Math.min(rawDt, 250);
         elapsedMsRef.current = (elapsedMsRef.current + safeDt) % FULL_CYCLE_DURATION_MS;
 
-        // Throttle React state updates to ~3 Hz (plenty smooth for a 3-minute celestial cycle)
-        if (now - lastUiUpdate >= 320) {
-          lastUiUpdate = now;
+        // Smooth 2 Hz quantized CSS var updates (zero React re-renders on grid/blocks/clouds)
+        if (now - lastDomUpdate >= 500) {
+          lastDomUpdate = now;
           const nextSnap = computeDayNightSnapshot(elapsedMsRef.current / FULL_CYCLE_DURATION_MS);
           applyLightingVars(nextSnap);
-          setSnapshot(nextSnap);
+
+          // Tiny celestial badge only needs ~1.25 Hz React state updates
+          if (now - lastBadgeUpdate >= 800) {
+            lastBadgeUpdate = now;
+            setSnapshot(nextSnap);
+          }
         }
       }
 
@@ -147,80 +258,20 @@ export const SkyAtmosphereOverlay: React.FC<SkyAtmosphereOverlayProps> = ({
 
   return (
     <>
-      {/* 1. Soft Atmospheric Screen & City Lighting Tint (pointer-events-none, preserves readability) */}
+      {/* 1. Single Consolidated Atmospheric Lighting Tint (auto-hidden at Night for zero fullscreen overdraw) */}
       <div
-        className="absolute inset-0 pointer-events-none z-[26] transition-colors duration-300"
-        style={{
-          backgroundColor: snapshot.ambientTintRgba,
-          backgroundImage: snapshot.ambientGlowCss
-        }}
+        ref={tintRef}
+        className="absolute inset-0 pointer-events-none z-[26]"
         aria-hidden="true"
       />
 
-      {/* 2. Multi-Height Two-Way Soft Drifting Pastel Clouds Above the City Board */}
+      {/* 2. Multi-Height Two-Way Soft Drifting Clouds (Static Memoized SVGs, Zero React Re-renders) */}
       <div
+        ref={cloudsWrapperRef}
         className="absolute inset-0 pointer-events-none overflow-hidden z-[27]"
         aria-hidden="true"
       >
-        {SKY_CLOUDS.map((cloud) => (
-          <div
-            key={cloud.id}
-            className={`absolute left-0 pointer-events-none ${
-              cloud.direction === 'ltr' ? 'cloud-drift-ltr' : 'cloud-drift-rtl'
-            }`}
-            style={{
-              top: `${cloud.topPct}%`,
-              width: `${cloud.widthPx}px`,
-              opacity: Number((cloud.baseOpacity * snapshot.cloudOpacityScale).toFixed(3)),
-              animationDuration: `${cloud.durationSec}s`,
-              animationDelay: `${cloud.delaySec}s`
-            }}
-          >
-            <svg viewBox="0 0 140 56" className="w-full h-auto overflow-visible">
-              {cloud.variant === 0 && (
-                <g>
-                  <ellipse cx="70" cy="40" rx="50" ry="12" fill={snapshot.cloudShadowColor} opacity="0.52" />
-                  <circle cx="38" cy="34" r="16" fill={snapshot.cloudColor} />
-                  <circle cx="62" cy="24" r="22" fill={snapshot.cloudColor} />
-                  <circle cx="88" cy="28" r="18" fill={snapshot.cloudColor} />
-                  <circle cx="106" cy="36" r="13" fill={snapshot.cloudColor} />
-                  <rect x="36" y="29" width="70" height="19" rx="9" fill={snapshot.cloudColor} />
-                </g>
-              )}
-              {cloud.variant === 1 && (
-                <g>
-                  <ellipse cx="68" cy="39" rx="44" ry="10" fill={snapshot.cloudShadowColor} opacity="0.48" />
-                  <circle cx="42" cy="33" r="14" fill={snapshot.cloudColor} />
-                  <circle cx="66" cy="25" r="19" fill={snapshot.cloudColor} />
-                  <circle cx="90" cy="33" r="14" fill={snapshot.cloudColor} />
-                  <rect x="42" y="29" width="48" height="16" rx="8" fill={snapshot.cloudColor} />
-                </g>
-              )}
-              {cloud.variant === 2 && (
-                <g>
-                  <ellipse cx="72" cy="41" rx="54" ry="11" fill={snapshot.cloudShadowColor} opacity="0.48" />
-                  <circle cx="34" cy="36" r="14" fill={snapshot.cloudColor} />
-                  <circle cx="56" cy="26" r="20" fill={snapshot.cloudColor} />
-                  <circle cx="82" cy="23" r="21" fill={snapshot.cloudColor} />
-                  <circle cx="106" cy="34" r="15" fill={snapshot.cloudColor} />
-                  <rect x="34" y="30" width="72" height="18" rx="9" fill={snapshot.cloudColor} />
-                </g>
-              )}
-              {cloud.variant === 3 && (
-                <g>
-                  {/* Small twin puffy wisps */}
-                  <ellipse cx="52" cy="37" rx="30" ry="8" fill={snapshot.cloudShadowColor} opacity="0.45" />
-                  <circle cx="38" cy="32" r="12" fill={snapshot.cloudColor} />
-                  <circle cx="54" cy="26" r="15" fill={snapshot.cloudColor} />
-                  <circle cx="69" cy="33" r="11" fill={snapshot.cloudColor} />
-                  <rect x="38" y="28" width="31" height="14" rx="7" fill={snapshot.cloudColor} />
-                  <circle cx="103" cy="23" r="9.5" fill={snapshot.cloudColor} opacity="0.88" />
-                  <circle cx="114" cy="26" r="7.5" fill={snapshot.cloudColor} opacity="0.88" />
-                </g>
-              )}
-            </svg>
-          </div>
-        ))}
+        <StaticCloudLayer />
       </div>
 
       {/* 3. Non-Numeric Celestial Sun/Moon Arc Horizon Indicator (Top-Right, Unobtrusive, Zero Clocks/Digits) */}
@@ -229,11 +280,11 @@ export const SkyAtmosphereOverlay: React.FC<SkyAtmosphereOverlayProps> = ({
         aria-hidden="true"
       >
         <div
-          className="rounded-2xl overflow-hidden shadow-md backdrop-blur-md transition-colors duration-500"
+          className="rounded-2xl overflow-hidden shadow-md transition-colors duration-500"
           style={{
             width: '112px',
             border: `1.5px solid ${snapshot.skyBadgeBorder}`,
-            boxShadow: '0 6px 16px rgba(41, 37, 36, 0.14), inset 0 1px 0 rgba(255,255,255,0.45)'
+            boxShadow: '0 6px 16px rgba(41, 37, 36, 0.14)'
           }}
         >
           {/* Miniature Tabletop Sky Dome */}

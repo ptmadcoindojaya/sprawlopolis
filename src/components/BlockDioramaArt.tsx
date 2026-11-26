@@ -174,7 +174,7 @@ const LampGroundPool: React.FC<{
         top: `${y - 2 * scale}%`,
         width: `${sizePct}%`,
         height: `${sizePct}%`,
-        transform: 'translate(-50%, -50%)',
+        transform: 'translate3d(-50%, -50%, 0)',
         opacity: 'var(--city-lamp-opacity, 0)',
         background:
           'radial-gradient(circle, rgba(255,228,132,0.54) 0%, rgba(255,192,84,0.28) 44%, rgba(255,172,56,0.08) 72%, rgba(255,168,52,0) 100%)'
@@ -184,50 +184,29 @@ const LampGroundPool: React.FC<{
 };
 
 /**
- * Unclipped Emissive Streetlamp Bulb Core + Radiant Golden Bloom Halo (CSS radial-gradient + soft box-shadow)
+ * Lightweight GPU-Friendly Emissive Streetlamp Bulb Core + Radiant Golden Bloom (Zero box-shadow / Zero blur)
  */
 const AnimatedLampGlow: React.FC<{
   x: number;
   y: number;
   scale?: number;
-  delay: string;
-}> = ({ x, y, scale = 1, delay }) => {
+}> = ({ x, y, scale = 1 }) => {
   const glowY = y - 13 * scale;
-  const haloPct = 36 * scale;
-  const corePct = 6.2 * scale;
+  const haloPct = 40 * scale;
   return (
     <div
-      className="absolute pointer-events-none overflow-visible"
+      className="absolute rounded-full pointer-events-none"
       style={{
         left: `${x}%`,
         top: `${glowY}%`,
         width: `${haloPct}%`,
         height: `${haloPct}%`,
-        opacity: 'var(--city-lamp-opacity, 0)'
+        transform: 'translate3d(-50%, -50%, 0)',
+        opacity: 'var(--city-lamp-opacity, 0)',
+        background:
+          'radial-gradient(circle, #fffbe0 0%, #fff6bd 13%, rgba(255,232,134,0.92) 24%, rgba(255,204,88,0.54) 44%, rgba(255,176,56,0.18) 70%, rgba(255,166,48,0) 100%)'
       }}
-    >
-      {/* Wide golden-amber radial atmospheric bloom */}
-      <div
-        className="w-full h-full rounded-full html-lamp-pulse"
-        style={{
-          background:
-            'radial-gradient(circle, rgba(255,248,196,0.92) 0%, rgba(255,216,104,0.58) 32%, rgba(255,180,62,0.22) 64%, rgba(255,166,48,0) 100%)',
-          animationDelay: delay
-        }}
-      />
-      {/* Crisp luminous lantern bulb core with soft warm box-shadow bloom */}
-      <div
-        className="absolute left-0 top-0 rounded-full"
-        style={{
-          width: `${(corePct / haloPct) * 100}%`,
-          height: `${(corePct / haloPct) * 100}%`,
-          transform: 'translate(-50%, -50%)',
-          backgroundColor: '#fffbe0',
-          boxShadow:
-            '0 0 6px 2px rgba(255, 232, 134, 0.92), 0 0 14px 4px rgba(255, 192, 72, 0.52)'
-        }}
-      />
-    </div>
+    />
   );
 };
 
@@ -246,7 +225,7 @@ const AnimatedWindowGlow: React.FC<{
       top: `${y}%`,
       width: `${sizePct}%`,
       height: `${sizePct}%`,
-      transform: 'translate(-50%, -50%)',
+      transform: 'translate3d(-50%, -50%, 0)',
       opacity: 'var(--city-window-glow, 0)',
       background:
         'radial-gradient(circle, rgba(255,238,148,0.68) 0%, rgba(255,198,84,0.34) 48%, rgba(255,172,56,0.08) 76%, rgba(255,164,48,0) 100%)'
@@ -272,7 +251,6 @@ const AnimatedSmokePuff: React.FC<{
       width: `${sizePct}%`,
       height: `${sizePct}%`,
       backgroundColor: '#fffdf9',
-      boxShadow: '0 1px 2px rgba(41,37,36,0.12)',
       animationDelay: delay,
       animationDuration: duration
     }}
@@ -640,7 +618,7 @@ const MiniCrates: React.FC<{ x: number; y: number; accent: string }> = ({ x, y, 
   </g>
 );
 
-export const BlockDioramaArt: React.FC<BlockDioramaArtProps> = ({
+export const BlockDioramaArt: React.FC<BlockDioramaArtProps> = React.memo(({
   cardId,
   blockIndex,
   zone,
@@ -757,10 +735,8 @@ export const BlockDioramaArt: React.FC<BlockDioramaArtProps> = ({
   if (layer === 'base') {
     return (
       <div className="absolute inset-0 w-full h-full pointer-events-none">
-        {/* Non-Emissive Base Surfaces (Saturation-preserving dimming at Night) */}
-        <div className="absolute inset-0 w-full h-full pointer-events-none city-night-surface">
-          {/* Static SVG: Ground, Ponds, Static Buildings, Trunks & Lamp Poles */}
-          <svg
+        {/* Static SVG: Ground, Ponds, Static Buildings, Trunks & Lamp Poles */}
+        <svg
             viewBox="0 0 100 100"
             className="absolute inset-0 w-full h-full pointer-events-none z-0"
             aria-hidden="true"
@@ -1144,7 +1120,15 @@ export const BlockDioramaArt: React.FC<BlockDioramaArtProps> = ({
               )}
             </svg>
           )}
-        </div>
+
+        {/* Lightweight Zero-Filter Twilight/Night Shade Overlay (Dims ground, base roofs & asphalt without CSS filter passes) */}
+        <div
+          className="absolute inset-0 w-full h-full pointer-events-none z-[2]"
+          style={{
+            backgroundColor: '#0b142c',
+            opacity: 'var(--city-tile-shade, 0)'
+          }}
+        />
 
         {/* Un-dimmed Emissive Base Lights (Lit Secondary Windows + Warm Streetlamp Sidewalk/Road Light Pools) */}
         <svg
@@ -1210,15 +1194,13 @@ export const BlockDioramaArt: React.FC<BlockDioramaArtProps> = ({
 
   return (
     <div className="absolute inset-0 w-full h-full pointer-events-none overflow-visible z-20">
-      {/* Non-Emissive Pop-Out Buildings, Tree Canopies & Ornaments (Saturation-preserving night lighting) */}
-      <div className="absolute inset-0 w-full h-full pointer-events-none overflow-visible city-night-surface">
-        {/* Static Pop-Out Structures & Tree Trunks */}
-        <svg
-          viewBox="0 0 100 100"
-          overflow="visible"
-          className="absolute inset-0 w-full h-full pointer-events-none"
-          aria-hidden="true"
-        >
+      {/* Static Pop-Out Structures & Tree Trunks (Zero CSS filter for crisp 60fps pop-out contrast) */}
+      <svg
+        viewBox="0 0 100 100"
+        overflow="visible"
+        className="absolute inset-0 w-full h-full pointer-events-none"
+        aria-hidden="true"
+      >
           {zone === 'P' && variant === 0 && (
             <>
               <StaticTreeBase x={28} y={isMini ? 24 : 20} scale={isMini ? 0.92 : 1.18} />
@@ -1344,7 +1326,6 @@ export const BlockDioramaArt: React.FC<BlockDioramaArtProps> = ({
             </>
           )}
         </div>
-      </div>
 
       {/* Un-dimmed Emissive Hero Windows (100% Pure Golden Contrast Above Night Surfaces) */}
       <svg
@@ -1368,7 +1349,7 @@ export const BlockDioramaArt: React.FC<BlockDioramaArtProps> = ({
       {/* Un-dimmed Unclipped Golden Streetlamp Blooms & Warm Hero Window Spill Halos */}
       <div className={htmlOverlayBoxClass}>
         {lampPositions.map((lp, idx) => (
-          <AnimatedLampGlow key={idx} x={lp.x} y={lp.y} scale={lp.scale} delay={lp.delay} />
+          <AnimatedLampGlow key={idx} x={lp.x} y={lp.y} scale={lp.scale} />
         ))}
 
         {zone === 'R' && (
@@ -1395,4 +1376,4 @@ export const BlockDioramaArt: React.FC<BlockDioramaArtProps> = ({
       </div>
     </div>
   );
-};
+});

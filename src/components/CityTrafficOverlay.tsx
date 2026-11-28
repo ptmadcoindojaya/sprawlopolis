@@ -561,7 +561,7 @@ export const CityTrafficOverlay: React.FC<CityTrafficOverlayProps> = ({
     const carEls: Array<HTMLDivElement | null> = cars.map(
       (car) => carRefsMap.current.get(car.id) ?? null
     );
-    const lastHidden = new Uint8Array(cars.length);
+    const lastHidden = new Uint8Array(cars.length).fill(2);
     const lastOpacityStr: string[] = new Array(cars.length).fill('');
 
     let lastNow = performance.now();
@@ -618,7 +618,12 @@ export const CityTrafficOverlay: React.FC<CityTrafficOverlayProps> = ({
 
         if (st.status === 'waiting') {
           if (lastHidden[i] !== 1) {
-            el.style.opacity = '0';
+            if (diorama3D) {
+              el.style.setProperty('--car-opacity', '0');
+            } else {
+              el.style.opacity = '0';
+            }
+            el.style.visibility = 'hidden';
             lastOpacityStr[i] = '0';
             lastHidden[i] = 1;
           }
@@ -655,7 +660,12 @@ export const CityTrafficOverlay: React.FC<CityTrafficOverlayProps> = ({
               profile.spawnWaitMinSec +
               Math.random() * (profile.spawnWaitMaxSec - profile.spawnWaitMinSec);
             if (lastHidden[i] !== 1) {
-              el.style.opacity = '0';
+              if (diorama3D) {
+                el.style.setProperty('--car-opacity', '0');
+              } else {
+                el.style.opacity = '0';
+              }
+              el.style.visibility = 'hidden';
               lastOpacityStr[i] = '0';
               lastHidden[i] = 1;
             }
@@ -680,7 +690,12 @@ export const CityTrafficOverlay: React.FC<CityTrafficOverlayProps> = ({
               profile.spawnWaitMinSec +
               Math.random() * (profile.spawnWaitMaxSec - profile.spawnWaitMinSec);
             if (lastHidden[i] !== 1) {
-              el.style.opacity = '0';
+              if (diorama3D) {
+                el.style.setProperty('--car-opacity', '0');
+              } else {
+                el.style.opacity = '0';
+              }
+              el.style.visibility = 'hidden';
               lastOpacityStr[i] = '0';
               lastHidden[i] = 1;
             }
@@ -703,7 +718,10 @@ export const CityTrafficOverlay: React.FC<CityTrafficOverlayProps> = ({
         const worldX = sample.x - Math.sin(sample.angleRad) * laneOffset;
         const worldY = sample.y + Math.cos(sample.angleRad) * laneOffset;
 
-        lastHidden[i] = 0;
+        if (lastHidden[i] !== 0) {
+          el.style.visibility = 'visible';
+          lastHidden[i] = 0;
+        }
         const deg = (sample.angleRad * 180) / Math.PI;
         const px = (worldX / totalW) * overlaySizeRef.current.w;
         const py = (worldY / totalH) * overlaySizeRef.current.h;
@@ -724,7 +742,12 @@ export const CityTrafficOverlay: React.FC<CityTrafficOverlayProps> = ({
         el.style.transform = `translate3d(${px.toFixed(1)}px, ${py.toFixed(1)}px, ${zPx.toFixed(1)}px) translate(-50%, -50%) rotate(${deg.toFixed(1)}deg)`;
         const opStr = st.opacity.toFixed(2);
         if (lastOpacityStr[i] !== opStr) {
-          el.style.opacity = opStr;
+          if (diorama3D) {
+            // Keep root preserve-3d container at opacity: 1 so CSS 3D never flattens ("gepeng") while fading!
+            el.style.setProperty('--car-opacity', opStr);
+          } else {
+            el.style.opacity = opStr;
+          }
           lastOpacityStr[i] = opStr;
         }
       }
@@ -779,18 +802,19 @@ export const CityTrafficOverlay: React.FC<CityTrafficOverlayProps> = ({
               carRefsMap.current.delete(car.id);
             }
           }}
-          className={`absolute left-0 top-0 pointer-events-none will-change-transform opacity-0 ${
-            diorama3D ? 'diorama-car-3d' : ''
+          className={`absolute left-0 top-0 pointer-events-none will-change-transform ${
+            diorama3D ? 'diorama-car-3d' : 'opacity-0'
           }`}
           style={{
             width: `${carWidthPx}px`,
-            height: `${carHeightPx}px`
+            height: `${carHeightPx}px`,
+            visibility: diorama3D ? 'hidden' : undefined
           }}
         >
           {/* Ground Contact Shadow Beneath 3D Car Tires */}
           {diorama3D && (
             <div
-              className="absolute -inset-[1px] rounded-[4px] pointer-events-none"
+              className="absolute -inset-[1px] rounded-[4px] pointer-events-none diorama-car-leaf"
               style={{
                 backgroundColor: 'rgba(18, 22, 32, 0.36)',
                 transform: 'translateZ(0.2px)'
@@ -805,7 +829,9 @@ export const CityTrafficOverlay: React.FC<CityTrafficOverlayProps> = ({
               right: compact ? '-17px' : '-35px',
               width: compact ? '19px' : '37px',
               height: compact ? '12px' : '23px',
-              opacity: 'var(--car-headlight-opacity, 0)',
+              opacity: diorama3D
+                ? 'calc(var(--car-headlight-opacity, 0) * var(--car-opacity, 1))'
+                : 'var(--car-headlight-opacity, 0)',
               transform: diorama3D ? 'translateZ(2.2px)' : undefined,
               clipPath: 'polygon(0% 30%, 100% 0%, 100% 100%, 0% 70%)',
               background:
@@ -820,7 +846,9 @@ export const CityTrafficOverlay: React.FC<CityTrafficOverlayProps> = ({
               left: compact ? '-5px' : '-8px',
               width: compact ? '7px' : '12px',
               height: compact ? '8px' : '14px',
-              opacity: 'var(--car-headlight-opacity, 0)',
+              opacity: diorama3D
+                ? 'calc(var(--car-headlight-opacity, 0) * var(--car-opacity, 1))'
+                : 'var(--car-headlight-opacity, 0)',
               transform: diorama3D ? 'translateZ(2.2px)' : undefined,
               background:
                 'radial-gradient(circle, rgba(255,74,74,0.9) 0%, rgba(240,48,58,0.42) 50%, rgba(235,44,54,0) 85%)'
@@ -837,7 +865,7 @@ export const CityTrafficOverlay: React.FC<CityTrafficOverlayProps> = ({
               >
                 {/* Chassis Top Deck */}
                 <div
-                  className="absolute inset-0 rounded-[2.5px] border border-[#2d343d]/80"
+                  className="absolute inset-0 rounded-[2.5px] border border-[#2d343d]/80 diorama-car-leaf"
                   style={{
                     backgroundColor: car.color,
                     boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.45)'
@@ -921,7 +949,7 @@ export const CityTrafficOverlay: React.FC<CityTrafficOverlayProps> = ({
                     }}
                   >
                     <div
-                      className="absolute inset-0 rounded-[1.5px] border border-[#2d343d]/65"
+                      className="absolute inset-0 rounded-[1.5px] border border-[#2d343d]/65 diorama-car-leaf"
                       style={{ backgroundColor: car.roofColor }}
                     />
                     <div
@@ -969,7 +997,7 @@ export const CityTrafficOverlay: React.FC<CityTrafficOverlayProps> = ({
                     }}
                   >
                     <div
-                      className="absolute inset-0 rounded-[1.5px] border border-[#2d343d]/60"
+                      className="absolute inset-0 rounded-[1.5px] border border-[#2d343d]/60 diorama-car-leaf"
                       style={{
                         backgroundColor: car.cargoColor || '#f8f3e6',
                         boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.75)'
@@ -1031,7 +1059,7 @@ export const CityTrafficOverlay: React.FC<CityTrafficOverlayProps> = ({
                   }}
                 >
                   <div
-                    className="absolute inset-0 rounded-[2px] border border-[#2d343d]/65"
+                    className="absolute inset-0 rounded-[2px] border border-[#2d343d]/65 diorama-car-leaf"
                     style={{
                       backgroundColor: car.roofColor,
                       boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.65)'
@@ -1101,7 +1129,7 @@ export const CityTrafficOverlay: React.FC<CityTrafficOverlayProps> = ({
                 >
                   {/* Sunlit Pastel Roof Top */}
                   <div
-                    className="absolute inset-0 rounded-[2px] border border-[#2d343d]/65"
+                    className="absolute inset-0 rounded-[2px] border border-[#2d343d]/65 diorama-car-leaf"
                     style={{
                       backgroundColor: car.roofColor,
                       boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.6)'

@@ -25,7 +25,7 @@ export const CardHand: React.FC<CardHandProps> = ({
   totalPlayers = 1
 }) => {
   const [flippedIndex, setFlippedIndex] = useState<number | null>(null);
-  const [isCollapsed, setIsCollapsed] = useState<boolean>(false);
+  const [isCollapsed, setIsCollapsed] = useState<boolean>(true);
   const [cameraYaw, setCameraYaw] = useState<number>(-35);
   const [isCameraTopDown, setIsCameraTopDown] = useState<boolean>(false);
 

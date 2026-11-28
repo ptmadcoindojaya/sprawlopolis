@@ -158,17 +158,19 @@ export const SkyAtmosphereOverlay: React.FC<SkyAtmosphereOverlayProps> = ({
       node.style.setProperty(key, value);
     };
 
+    const q05 = (val: number) => (Math.round(val * 20) / 20).toFixed(2);
+
     if (el) {
-      setVarIfChanged(el, '--city-window-opacity', snap.cityWindowOpacity.toFixed(2));
-      setVarIfChanged(el, '--city-window-glow', snap.cityWindowGlow.toFixed(2));
-      setVarIfChanged(el, '--city-lamp-opacity', snap.cityLampOpacity.toFixed(2));
-      setVarIfChanged(el, '--car-headlight-opacity', snap.carHeadlightOpacity.toFixed(2));
+      setVarIfChanged(el, '--city-window-opacity', q05(snap.cityWindowOpacity));
+      setVarIfChanged(el, '--city-window-glow', q05(snap.cityWindowGlow));
+      setVarIfChanged(el, '--city-lamp-opacity', q05(snap.cityLampOpacity));
+      setVarIfChanged(el, '--car-headlight-opacity', q05(snap.carHeadlightOpacity));
       setVarIfChanged(el, '--board-backdrop-bg', snap.boardBackdropBg);
       setVarIfChanged(el, '--coord-text-color', snap.coordTextColor);
       setVarIfChanged(el, '--empty-cell-bg', snap.emptyCellBg);
       setVarIfChanged(el, '--empty-grid-border', snap.emptyGridBorder);
-      setVarIfChanged(el, '--empty-terrain-opacity', snap.emptyTerrainOpacity.toFixed(2));
-      setVarIfChanged(el, '--city-tile-shade', snap.cityTileShadeOpacity.toFixed(2));
+      setVarIfChanged(el, '--empty-terrain-opacity', q05(snap.emptyTerrainOpacity));
+      setVarIfChanged(el, '--city-tile-shade', q05(snap.cityTileShadeOpacity));
       setVarIfChanged(el, '--city-night-rim-color', snap.cityNightRimColor);
       setVarIfChanged(el, '--diorama-plinth-top', snap.dioramaPlinthTop);
       setVarIfChanged(el, '--diorama-plinth-border', snap.dioramaPlinthBorder);
@@ -178,9 +180,9 @@ export const SkyAtmosphereOverlay: React.FC<SkyAtmosphereOverlayProps> = ({
       setVarIfChanged(el, '--diorama-plinth-west', snap.dioramaPlinthWest);
       setVarIfChanged(el, '--diorama-plinth-shadow', snap.dioramaPlinthShadow);
       setVarIfChanged(el, '--diorama-wall-tint', snap.dioramaWallTint);
-      setVarIfChanged(el, '--diorama-wall-shade', snap.dioramaWallShadeOpacity.toFixed(2));
-      const sunSheen = 0.13 - snap.cityWindowOpacity * 0.12;
-      setVarIfChanged(el, '--tile-sun-sheen', sunSheen.toFixed(2));
+      setVarIfChanged(el, '--diorama-wall-shade', q05(snap.dioramaWallShadeOpacity));
+      const sunSheen = Math.max(0.01, 0.13 - snap.cityWindowOpacity * 0.12);
+      setVarIfChanged(el, '--tile-sun-sheen', q05(sunSheen));
     }
 
     // Update single atmospheric warm-hour tint directly via ref & hide completely at Night (zero fullscreen overdraw!)
@@ -238,14 +240,13 @@ export const SkyAtmosphereOverlay: React.FC<SkyAtmosphereOverlayProps> = ({
         const safeDt = Math.min(rawDt, 250);
         elapsedMsRef.current = (elapsedMsRef.current + safeDt) % FULL_CYCLE_DURATION_MS;
 
-        // Smooth 2 Hz quantized CSS var updates (zero React re-renders on grid/blocks/clouds)
-        if (now - lastDomUpdate >= 500) {
+        // Smooth ~0.9 Hz quantized CSS var updates to avoid main-thread style-recalc hitches on large night cities
+        if (now - lastDomUpdate >= 1100) {
           lastDomUpdate = now;
           const nextSnap = computeDayNightSnapshot(elapsedMsRef.current / FULL_CYCLE_DURATION_MS);
           applyLightingVars(nextSnap);
 
-          // Tiny celestial badge only needs ~1.25 Hz React state updates
-          if (now - lastBadgeUpdate >= 800) {
+          if (now - lastBadgeUpdate >= 1100) {
             lastBadgeUpdate = now;
             setSnapshot(nextSnap);
           }

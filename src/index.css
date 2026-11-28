@@ -229,37 +229,31 @@
 .html-tree-sway {
   transform-origin: bottom center;
   animation: treeSway 3.1s ease-in-out infinite;
-  will-change: transform;
 }
 
 .html-flower-sway {
   transform-origin: bottom center;
   animation: flowerSway 2.6s ease-in-out infinite;
-  will-change: transform;
 }
 
 .html-sign-sway {
   transform-origin: bottom center;
   animation: signSway 3.0s ease-in-out infinite;
-  will-change: transform;
 }
 
 .html-duck-bob {
   transform-origin: center center;
   animation: duckBob 3.5s ease-in-out infinite;
-  will-change: transform;
 }
 
 .html-water-ripple {
   transform-origin: center center;
   animation: waterRipple 2.9s ease-out infinite;
-  will-change: transform, opacity;
 }
 
 .html-smoke-rise {
   transform-origin: center center;
   animation: smokeRise 3.1s ease-out infinite;
-  will-change: transform, opacity;
 }
 
 /* Tactile Card Landing Spring Settle, Soft Warm Dust Puff Burst & Micro Bounce Pebbles */
@@ -402,9 +396,13 @@
   perspective-origin: 50% 50%;
 }
 
-.diorama-stage-3d {
+.diorama-camera-rig {
   transform-style: preserve-3d;
   will-change: transform;
+}
+
+.diorama-stage-3d {
+  transform-style: preserve-3d;
 }
 
 .diorama-camera-smooth {
@@ -452,7 +450,7 @@
   pointer-events: none;
 }
 
-/* Tahap 4: Extruded 3D Mini Cars on Diorama Roads */
+/* Tahap 4: Extruded 3D Mini Cars on Diorama Roads (Fade via --car-opacity on leaf faces so preserve-3d NEVER flattens) */
 .diorama-car-3d {
   transform-style: preserve-3d;
 }
@@ -461,6 +459,11 @@
   position: absolute;
   backface-visibility: visible;
   pointer-events: none;
+  opacity: var(--car-opacity, 1);
+}
+
+.diorama-car-leaf {
+  opacity: var(--car-opacity, 1);
 }
 
 .diorama-block-top {
@@ -487,7 +490,6 @@
   transform-style: preserve-3d;
   transform-origin: 0% 0%;
   transition: var(--cam-transition, none), opacity 180ms ease-out;
-  will-change: transform, opacity;
 }
 
 /* Tahap 3: Ground Footprint Preview, Road Seam Connector & Road Inspect Mode */
@@ -504,7 +506,6 @@
 
 .road-seam-badge {
   animation: roadSeamPulse 1.35s ease-in-out infinite;
-  will-change: transform, opacity;
 }
 
 .diorama-footprint-valid {
@@ -534,7 +535,6 @@
   transition: var(--cam-transition, none);
   pointer-events: none;
   overflow: visible;
-  will-change: transform;
 }
 
 @keyframes remoteAimPulse {

@@ -157,8 +157,52 @@ const StaticLampPole: React.FC<{ x: number; y: number; scale?: number }> = ({
 );
 
 /**
- * Emissive Warm Golden Streetlamp / Park Lantern Ground Light Pool
- * Illuminates surrounding sidewalk, grass, and dark asphalt road at Sunset & Night
+ * Zero-Layer SVG Warm Golden Streetlamp Ground Pool (Batched inside base tile SVG for silky 60fps Night performance)
+ */
+const LampGroundPoolSvg: React.FC<{ x: number; y: number; scale?: number }> = ({
+  x,
+  y,
+  scale = 1
+}) => (
+  <g transform={`translate(${x}, ${y - 2 * scale}) scale(${scale})`}>
+    <ellipse cx="0" cy="0" rx="22" ry="18" fill="#ffb845" opacity="0.16" />
+    <ellipse cx="0" cy="0" rx="13" ry="10.5" fill="#ffd873" opacity="0.28" />
+    <ellipse cx="0" cy="0" rx="6.5" ry="5.2" fill="#fff0a6" opacity="0.34" />
+  </g>
+);
+
+/**
+ * Zero-Layer SVG Radiant Streetlamp Bulb & Golden Halo (Zero extra HTML div or GPU compositor layer per lamp)
+ */
+const LampBulbGlowSvg: React.FC<{ x: number; y: number; scale?: number }> = ({
+  x,
+  y,
+  scale = 1
+}) => (
+  <g transform={`translate(${x}, ${y - 13 * scale}) scale(${scale})`}>
+    <circle cx="0" cy="0" r="14.5" fill="#ffb238" opacity="0.18" />
+    <circle cx="0" cy="0" r="8.6" fill="#ffd96b" opacity="0.35" />
+    <circle cx="0" cy="0" r="4.3" fill="#fff4b5" opacity="0.72" />
+    <circle cx="0" cy="0" r="2.3" fill="#fffde8" opacity="0.98" />
+  </g>
+);
+
+/**
+ * Zero-Layer SVG Warm Emissive Window Spill Halo (Batched inside existing building night-lights SVG)
+ */
+const WindowGlowSvg: React.FC<{ x: number; y: number; radius?: number }> = ({
+  x,
+  y,
+  radius = 13
+}) => (
+  <g transform={`translate(${x}, ${y})`}>
+    <circle cx="0" cy="0" r={radius} fill="#ffb942" opacity="0.17" />
+    <circle cx="0" cy="0" r={radius * 0.56} fill="#ffe688" opacity="0.28" />
+  </g>
+);
+
+/**
+ * Emissive Warm Golden Streetlamp / Park Lantern Ground Light Pool (Mini/Gallery cards only)
  */
 const LampGroundPool: React.FC<{
   x: number;
@@ -174,17 +218,17 @@ const LampGroundPool: React.FC<{
         top: `${y - 2 * scale}%`,
         width: `${sizePct}%`,
         height: `${sizePct}%`,
-        transform: 'translate3d(-50%, -50%, 0)',
+        transform: 'translate(-50%, -50%)',
         opacity: 'var(--city-lamp-opacity, 0)',
         background:
-          'radial-gradient(circle, rgba(255,228,132,0.54) 0%, rgba(255,192,84,0.28) 44%, rgba(255,172,56,0.08) 72%, rgba(255,168,52,0) 100%)'
+          'radial-gradient(circle, rgba(255,228,132,0.52) 0%, rgba(255,192,84,0.22) 52%, rgba(255,168,52,0) 100%)'
       }}
     />
   );
 };
 
 /**
- * Lightweight GPU-Friendly Emissive Streetlamp Bulb Core + Radiant Golden Bloom (Zero box-shadow / Zero blur)
+ * Emissive Streetlamp Bulb Core + Radiant Golden Bloom (Mini/Gallery cards only)
  */
 const AnimatedLampGlow: React.FC<{
   x: number;
@@ -201,17 +245,17 @@ const AnimatedLampGlow: React.FC<{
         top: `${glowY}%`,
         width: `${haloPct}%`,
         height: `${haloPct}%`,
-        transform: 'translate3d(-50%, -50%, 0)',
+        transform: 'translate(-50%, -50%)',
         opacity: 'var(--city-lamp-opacity, 0)',
         background:
-          'radial-gradient(circle, #fffbe0 0%, #fff6bd 13%, rgba(255,232,134,0.92) 24%, rgba(255,204,88,0.54) 44%, rgba(255,176,56,0.18) 70%, rgba(255,166,48,0) 100%)'
+          'radial-gradient(circle, #fffbe0 0%, rgba(255,232,134,0.88) 26%, rgba(255,198,84,0.34) 56%, rgba(255,166,48,0) 100%)'
       }}
     />
   );
 };
 
 /**
- * Warm High-Contrast Emissive Window Spill Halo for Buildings at Sunset/Night
+ * Warm High-Contrast Emissive Window Spill Halo (Mini/Gallery cards only)
  */
 const AnimatedWindowGlow: React.FC<{
   x: number;
@@ -225,10 +269,10 @@ const AnimatedWindowGlow: React.FC<{
       top: `${y}%`,
       width: `${sizePct}%`,
       height: `${sizePct}%`,
-      transform: 'translate3d(-50%, -50%, 0)',
+      transform: 'translate(-50%, -50%)',
       opacity: 'var(--city-window-glow, 0)',
       background:
-        'radial-gradient(circle, rgba(255,238,148,0.68) 0%, rgba(255,198,84,0.34) 48%, rgba(255,172,56,0.08) 76%, rgba(255,164,48,0) 100%)'
+        'radial-gradient(circle, rgba(255,238,148,0.62) 0%, rgba(255,196,82,0.24) 55%, rgba(255,164,48,0) 100%)'
     }}
   />
 );
@@ -1369,23 +1413,39 @@ export const BlockDioramaArt: React.FC<BlockDioramaArtProps> = React.memo(({
           </svg>
         )}
 
-        <div className={`${htmlOverlayBoxClass} z-[4]`}>
-          {/* Warm Streetlamp / Park Lantern Ground Light Pools Illuminating Sidewalk & Asphalt */}
-          {lampPositions.map((lp, idx) => (
-            <LampGroundPool key={idx} x={lp.x} y={lp.y} scale={lp.scale} />
-          ))}
+        {/* Un-dimmed Emissive Streetlamp Ground Pools (Batched SVG on 3D board — zero extra GPU layers!) */}
+        {isBoard3D && lampPositions.length > 0 && (
+          <svg
+            viewBox="0 0 100 100"
+            className="absolute inset-0 w-full h-full pointer-events-none z-[4]"
+            style={{ opacity: 'var(--city-lamp-opacity, 0)' }}
+            aria-hidden="true"
+          >
+            {lampPositions.map((lp, idx) => (
+              <LampGroundPoolSvg key={idx} x={lp.x} y={lp.y} scale={lp.scale} />
+            ))}
+          </svg>
+        )}
 
-          {/* Secondary Building Warm Window Spill Halos (flat only in mini/gallery; stood upright on 3D board) */}
-          {!isBoard3D && zone === 'R' && (
-            <AnimatedWindowGlow x={anchors.secX - 2} y={anchors.secY - 6} sizePct={26} />
-          )}
-          {!isBoard3D && zone === 'C' && (
-            <AnimatedWindowGlow x={anchors.secX - 3} y={anchors.secY - 5} sizePct={28} />
-          )}
-          {!isBoard3D && zone === 'I' && (variant === 1 || variant === 2) && (
-            <AnimatedWindowGlow x={anchors.secX - 2} y={anchors.secY - 8} sizePct={24} />
-          )}
-        </div>
+        {!isBoard3D && (
+          <div className={`${htmlOverlayBoxClass} z-[4]`}>
+            {/* Warm Streetlamp / Park Lantern Ground Light Pools Illuminating Sidewalk & Asphalt */}
+            {lampPositions.map((lp, idx) => (
+              <LampGroundPool key={idx} x={lp.x} y={lp.y} scale={lp.scale} />
+            ))}
+
+            {/* Secondary Building Warm Window Spill Halos (flat only in mini/gallery) */}
+            {zone === 'R' && (
+              <AnimatedWindowGlow x={anchors.secX - 2} y={anchors.secY - 6} sizePct={26} />
+            )}
+            {zone === 'C' && (
+              <AnimatedWindowGlow x={anchors.secX - 3} y={anchors.secY - 5} sizePct={28} />
+            )}
+            {zone === 'I' && (variant === 1 || variant === 2) && (
+              <AnimatedWindowGlow x={anchors.secX - 2} y={anchors.secY - 8} sizePct={24} />
+            )}
+          </div>
+        )}
       </div>
     );
   }
@@ -1514,6 +1574,11 @@ export const BlockDioramaArt: React.FC<BlockDioramaArtProps> = React.memo(({
               style={{ opacity: 'var(--city-window-opacity, 0)' }}
               aria-hidden="true"
             >
+              <WindowGlowSvg
+                x={-3 * heroScale}
+                y={-(isHouseTall ? 10 : 6) * heroScale}
+                radius={14 * heroScale}
+              />
               <MiniHouseLights x={0} y={0} scale={heroScale} tall={isHouseTall} />
             </svg>
             {hasHouseChimney && (
@@ -1524,11 +1589,6 @@ export const BlockDioramaArt: React.FC<BlockDioramaArtProps> = React.memo(({
                 delay={delay1}
               />
             )}
-            <AnimatedWindowGlow
-              x={-3 * heroScale}
-              y={-(isHouseTall ? 10 : 6) * heroScale}
-              sizePct={30 * heroScale}
-            />
           </DioramaStandup>
         )}
 
@@ -1551,6 +1611,11 @@ export const BlockDioramaArt: React.FC<BlockDioramaArtProps> = React.memo(({
               style={{ opacity: 'var(--city-window-opacity, 0)' }}
               aria-hidden="true"
             >
+              <WindowGlowSvg
+                x={-3.5 * heroScale}
+                y={-(isShopTall ? 8 : 5) * heroScale}
+                radius={15 * heroScale}
+              />
               <MiniShopLights x={0} y={0} scale={heroScale} tall={isShopTall} />
             </svg>
             {hasShopSign && (
@@ -1562,11 +1627,6 @@ export const BlockDioramaArt: React.FC<BlockDioramaArtProps> = React.memo(({
                 delay={delay1}
               />
             )}
-            <AnimatedWindowGlow
-              x={-3.5 * heroScale}
-              y={-(isShopTall ? 8 : 5) * heroScale}
-              sizePct={32 * heroScale}
-            />
           </DioramaStandup>
         )}
 
@@ -1582,6 +1642,11 @@ export const BlockDioramaArt: React.FC<BlockDioramaArtProps> = React.memo(({
               style={{ opacity: 'var(--city-window-opacity, 0)' }}
               aria-hidden="true"
             >
+              <WindowGlowSvg
+                x={-3 * heroScale}
+                y={-(factoryVariant === 'silos' ? 18 : 6) * heroScale}
+                radius={12.5 * heroScale}
+              />
               <MiniFactoryLights x={0} y={0} scale={heroScale} variant={factoryVariant} />
             </svg>
             {factoryVariant === 'sawtooth' && (
@@ -1602,11 +1667,6 @@ export const BlockDioramaArt: React.FC<BlockDioramaArtProps> = React.memo(({
                 />
               </>
             )}
-            <AnimatedWindowGlow
-              x={-3 * heroScale}
-              y={-(factoryVariant === 'silos' ? 18 : 6) * heroScale}
-              sizePct={26 * heroScale}
-            />
           </DioramaStandup>
         )}
 
@@ -1631,6 +1691,7 @@ export const BlockDioramaArt: React.FC<BlockDioramaArtProps> = React.memo(({
               style={{ opacity: 'var(--city-window-opacity, 0)' }}
               aria-hidden="true"
             >
+              <WindowGlowSvg x={-2} y={-6} radius={12} />
               <MiniHouseLights x={0} y={0} scale={secHouseScale} />
             </svg>
             {variant === 2 && (
@@ -1641,7 +1702,6 @@ export const BlockDioramaArt: React.FC<BlockDioramaArtProps> = React.memo(({
                 delay={delay1}
               />
             )}
-            <AnimatedWindowGlow x={-2} y={-6} sizePct={26} />
           </DioramaStandup>
         )}
 
@@ -1664,9 +1724,9 @@ export const BlockDioramaArt: React.FC<BlockDioramaArtProps> = React.memo(({
               style={{ opacity: 'var(--city-window-opacity, 0)' }}
               aria-hidden="true"
             >
+              <WindowGlowSvg x={-3} y={-5} radius={13} />
               <MiniShopLights x={0} y={0} scale={secShopScale} tall={variant === 3} />
             </svg>
-            <AnimatedWindowGlow x={-3} y={-5} sizePct={28} />
           </DioramaStandup>
         )}
 
@@ -1687,6 +1747,7 @@ export const BlockDioramaArt: React.FC<BlockDioramaArtProps> = React.memo(({
               style={{ opacity: 'var(--city-window-opacity, 0)' }}
               aria-hidden="true"
             >
+              <WindowGlowSvg x={-2} y={-8} radius={11.5} />
               <MiniFactoryLights
                 x={0}
                 y={0}
@@ -1694,7 +1755,6 @@ export const BlockDioramaArt: React.FC<BlockDioramaArtProps> = React.memo(({
                 variant={variant === 1 ? 'warehouse' : 'silos'}
               />
             </svg>
-            <AnimatedWindowGlow x={-2} y={-8} sizePct={24} />
           </DioramaStandup>
         )}
 
@@ -1715,13 +1775,15 @@ export const BlockDioramaArt: React.FC<BlockDioramaArtProps> = React.memo(({
           </DioramaStandup>
         ))}
 
-        {/* Upright Standing Streetlamps & Glowing Night Halos */}
+        {/* Upright Standing Streetlamps & Zero-Layer SVG Glowing Night Halos */}
         {lampPositions.map((lp, idx) => (
           <DioramaStandup key={`lamp-${idx}`} x={lp.x} y={lp.y} liftZ={2.2}>
             <svg viewBox="0 0 100 100" overflow="visible" className="absolute inset-0 w-full h-full pointer-events-none" aria-hidden="true">
               <StaticLampPole x={0} y={0} scale={lp.scale} />
+              <g style={{ opacity: 'var(--city-lamp-opacity, 0)' }}>
+                <LampBulbGlowSvg x={0} y={0} scale={lp.scale} />
+              </g>
             </svg>
-            <AnimatedLampGlow x={0} y={0} scale={lp.scale} />
           </DioramaStandup>
         ))}
       </div>

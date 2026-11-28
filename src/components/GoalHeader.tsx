@@ -59,7 +59,7 @@ export const GoalHeader: React.FC<GoalHeaderProps> = ({
   scoreBreakdown,
   onOpenScoreDetails
 }) => {
-  const [isDockHidden, setIsDockHidden] = useState<boolean>(false);
+  const [isDockHidden, setIsDockHidden] = useState<boolean>(true);
   const [position, setPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState<boolean>(false);
 

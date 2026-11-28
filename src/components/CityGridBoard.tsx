@@ -961,7 +961,7 @@ export const CityGridBoard: React.FC<CityGridBoardProps> = ({
       >
         {/* Pan + Zoom Camera Rig (pointer-events-none so no 3D child plane steals or blocks ray-plane hit-testing) */}
         <div
-          className={`relative shrink-0 diorama-stage-3d pointer-events-none ${cameraTransitionClass}`}
+          className={`relative shrink-0 diorama-camera-rig pointer-events-none ${cameraTransitionClass}`}
           style={{
             transform: `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${zoom})`,
             transformOrigin: 'center center'
@@ -969,7 +969,7 @@ export const CityGridBoard: React.FC<CityGridBoardProps> = ({
         >
           {/* Mekorama-Style Tilt + Orbit Diorama Plane */}
           <div
-            className={`relative shrink-0 diorama-stage-3d ${cameraTransitionClass}`}
+            className={`relative shrink-0 diorama-camera-rig ${cameraTransitionClass}`}
             style={
               {
                 transform: `rotateX(${tilt}deg) rotateZ(${yaw}deg)`,
@@ -987,13 +987,13 @@ export const CityGridBoard: React.FC<CityGridBoardProps> = ({
               className="relative diorama-stage-3d diorama-plinth-top rounded-[10px] border"
               style={{ padding: `${PLINTH_PAD}px` }}
             >
-              {/* Soft Ambient Floating Island Shadow Below Plinth */}
+              {/* Zero-Blur Ambient Floating Island Shadow Below Plinth (Zero GPU blur shader overhead at Night) */}
               <div
-                className="absolute inset-0 rounded-[18px] pointer-events-none"
+                className="absolute -inset-4 rounded-[26px] pointer-events-none"
                 style={{
-                  transform: `translateZ(-${PLINTH_THICKNESS + 8}px) scale(1.03)`,
-                  background: 'var(--diorama-plinth-shadow, rgba(38, 30, 20, 0.24))',
-                  filter: 'blur(18px)'
+                  transform: `translateZ(-${PLINTH_THICKNESS + 8}px)`,
+                  background:
+                    'radial-gradient(ellipse 72% 72% at 50% 50%, var(--diorama-plinth-shadow, rgba(38, 30, 20, 0.24)) 45%, rgba(0, 0, 0, 0) 100%)'
                 }}
                 aria-hidden="true"
               />
@@ -1758,10 +1758,10 @@ const BlockCell: React.FC<BlockCellProps> = React.memo(({ block, size, isGhost, 
             sizeMode="board"
           />
 
-          {/* Subtle Stacked Layer Micro-Indicator (Clear in both 3D Diorama and 2D Top-Down views) */}
+          {/* Subtle Stacked Layer Micro-Indicator (Clear in both 3D Diorama and 2D Top-Down views; zero backdrop-blur) */}
           {isStacked && (
             <span
-              className="absolute bottom-0.5 right-0.5 z-[6] px-1 py-[0.5px] rounded bg-[#292524]/65 text-[#fffdf9] text-[7.5px] font-mono font-bold leading-none tracking-tight backdrop-blur-[1px]"
+              className="absolute bottom-0.5 right-0.5 z-[6] px-1 py-[0.5px] rounded bg-[#292524]/82 text-[#fffdf9] text-[7.5px] font-mono font-bold leading-none tracking-tight"
               title={`Tumpukan Lapisan ${block.layer + 1}`}
             >
               L{block.layer + 1}

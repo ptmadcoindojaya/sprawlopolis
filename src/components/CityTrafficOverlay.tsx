@@ -349,7 +349,7 @@ function buildRoadPaths(
   return paths;
 }
 
-export const CityTrafficOverlay: React.FC<CityTrafficOverlayProps> = ({
+export const CityTrafficOverlay: React.FC<CityTrafficOverlayProps> = React.memo(({
   grid,
   minX,
   maxX,
@@ -1287,5 +1287,5 @@ export const CityTrafficOverlay: React.FC<CityTrafficOverlayProps> = ({
       })}
     </div>
   );
-};
+});
 

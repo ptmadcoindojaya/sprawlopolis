@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { GridState, CardInHand, GridPos, PlacedBlock } from '../types';
 import { ZONE_NAMES } from '../data/cards';
 import { getOrientedBlocks } from '../utils/cardUtils';
@@ -7,6 +7,10 @@ import { CityTrafficOverlay } from './CityTrafficOverlay';
 import { EmptyCellTerrain } from './EmptyCellTerrain';
 import { RemoteHoverAim } from '../utils/multiplayerSync';
 import { Check, X, RotateCcw, RotateCw, Compass, Box, Map as MapIcon, Crosshair, Route } from 'lucide-react';
+
+const EMPTY_STRING_SET: ReadonlySet<string> = new Set();
+const EMPTY_OPACITY_MAP: ReadonlyMap<string, number> = new Map();
+type EmptyCellTier = 'near' | 'outer' | 'far';
 
 const DEFAULT_CAMERA_YAW = -35;
 const DEFAULT_CAMERA_TILT = 44;
@@ -923,13 +927,68 @@ export const CityGridBoard: React.FC<CityGridBoardProps> = ({
     }
   }
 
-  // Camera-facing foreground vector in world grid space for smart anti-occlusion X-ray during hover
-  const yawRad = (yaw * Math.PI) / 180;
-  const frontDirX = Math.sin(yawRad);
-  const frontDirY = Math.cos(yawRad);
-  const hoverCenterDepth = hoverPos
-    ? (hoverPos.x + 0.5) * frontDirX + (hoverPos.y + 0.5) * frontDirY
-    : 0;
+  // Camera-facing foreground vector in world grid space (quantized to 15° sectors so orbit drag doesn't churn hover X-ray)
+  const yawSectorRad = (Math.round(yaw / 15) * 15 * Math.PI) / 180;
+  const isTiltedForXRay = !isTopDown && tilt > 10;
+
+  // Compact map of ONLY the ~4-8 placed blocks dimmed by active hover X-ray (empty Map when idle/dragging -> 0 block re-renders!)
+  const dimmedPopoutMap = useMemo<ReadonlyMap<string, number>>(() => {
+    if (isRoadInspect || !isHoverActive || !hoverPos || interactionMode !== 'idle') {
+      return EMPTY_OPACITY_MAP;
+    }
+
+    const map = new Map<string, number>();
+    const fx = Math.sin(yawSectorRad);
+    const fy = Math.cos(yawSectorRad);
+    const centerDepth = (hoverPos.x + 0.5) * fx + (hoverPos.y + 0.5) * fy;
+
+    // 1. Blocks directly underneath the 2x2 hover target
+    for (let dy = 0; dy <= 1; dy++) {
+      for (let dx = 0; dx <= 1; dx++) {
+        const k = `${hoverPos.x + dx},${hoverPos.y + dy}`;
+        if (grid[k]) {
+          map.set(k, 0.22);
+        }
+      }
+    }
+
+    // 2. Nearby foreground blocks (Chebyshev <= 2) standing in front of target along camera view
+    if (isTiltedForXRay) {
+      for (let gy = hoverPos.y - 2; gy <= hoverPos.y + 3; gy++) {
+        for (let gx = hoverPos.x - 2; gx <= hoverPos.x + 3; gx++) {
+          const k = `${gx},${gy}`;
+          if (!grid[k] || map.has(k)) continue;
+          const cellDepth = gx * fx + gy * fy;
+          if (cellDepth > centerDepth - 0.15) {
+            map.set(k, 0.34);
+          }
+        }
+      }
+    }
+
+    return map.size > 0 ? map : EMPTY_OPACITY_MAP;
+  }, [
+    grid,
+    isRoadInspect,
+    isHoverActive,
+    hoverPos?.x,
+    hoverPos?.y,
+    interactionMode,
+    isTiltedForXRay,
+    yawSectorRad
+  ]);
+
+  const settlingKeys = useMemo<ReadonlySet<string>>(() => {
+    if (placementBursts.length === 0) return EMPTY_STRING_SET;
+    const set = new Set<string>();
+    for (const b of placementBursts) {
+      b.keys.forEach((k) => set.add(k));
+    }
+    return set;
+  }, [placementBursts]);
+
+  const placedBlockCount = keys.length;
+  const isLargeCity = placedBlockCount >= 32;
 
   return (
     <div
@@ -1072,235 +1131,168 @@ export const CityGridBoard: React.FC<CityGridBoardProps> = ({
               </div>
 
               {/* Inner Unpadded Grid Plane (Exact CELL_SIZE Alignment for Cells, Traffic & Dust Bursts) */}
-              <div className={`relative diorama-stage-3d ${isRoadInspect ? 'road-inspect-active' : ''}`}>
-          {/* Render All Cells in Bounding Canvas */}
-          {Array.from({ length: renderMaxY - renderMinY + 1 }).map((_, rIdx) => {
-            const y = renderMinY + rIdx;
-            return (
-              <div key={`row-${y}`} className="flex overflow-visible diorama-stage-3d">
-                {Array.from({ length: renderMaxX - renderMinX + 1 }).map((_, cIdx) => {
-                  const x = renderMinX + cIdx;
-                  const key = `${x},${y}`;
-                  const placedBlock = grid[key];
+              <div
+                className={`relative diorama-stage-3d ${isRoadInspect ? 'road-inspect-active' : ''} ${
+                  isLargeCity ? 'diorama-large-city' : ''
+                } ${interactionMode !== 'idle' ? 'camera-interacting' : ''}`}
+              >
+          {/* Memoized Static City Cells & Pruned Outskirts (Decoupled from camera pan/orbit/zoom & remote aim!) */}
+          <StaticCityCells
+            grid={grid}
+            renderMinX={renderMinX}
+            renderMaxX={renderMaxX}
+            renderMinY={renderMinY}
+            renderMaxY={renderMaxY}
+            placedBlockCount={placedBlockCount}
+            isRoadInspect={isRoadInspect}
+            settlingKeys={settlingKeys}
+            dimmedPopoutMap={dimmedPopoutMap}
+          />
 
-                  // Check if this empty cell directly borders an existing city block (tactile diorama socket)
-                  const isNearCity =
-                    !placedBlock &&
-                    (!!grid[`${x - 1},${y}`] ||
-                      !!grid[`${x + 1},${y}`] ||
-                      !!grid[`${x},${y - 1}`] ||
-                      !!grid[`${x},${y + 1}`]);
+          {/* Isolated 4-Cell 2x2 Hover Preview Overlay (Ground Footprint + Floating Ghost + Road Seams) */}
+          {isHoverActive && hoverPos && hoverOrientedBlocks && selectedCard && (
+            <div
+              className="absolute pointer-events-none overflow-visible diorama-stage-3d"
+              style={{
+                left: (hoverPos.x - renderMinX) * CELL_SIZE,
+                top: (hoverPos.y - renderMinY) * CELL_SIZE,
+                width: CELL_SIZE * 2,
+                height: CELL_SIZE * 2
+              }}
+              aria-hidden="true"
+            >
+              {[0, 1, 2, 3].map((idx) => {
+                const dx = idx % 2;
+                const dy = Math.floor(idx / 2);
+                const gx = hoverPos.x + dx;
+                const gy = hoverPos.y + dy;
+                const existing = grid[`${gx},${gy}`];
+                const cellSurfaceZ = existing ? getBlockExtrusionHeight(existing.layer) : 0;
+                const previewBlock = hoverOrientedBlocks[idx];
+                const cellEdgeStatus = hoverOuterEdges[idx];
 
-                  let hoverBlockIndex = -1;
-                  let isHoverTarget = false;
-                  let hoverDx = -1;
-                  let hoverDy = -1;
-
-                  if (isHoverActive && hoverPos) {
-                    hoverDx = x - hoverPos.x;
-                    hoverDy = y - hoverPos.y;
-                    if ((hoverDx === 0 || hoverDx === 1) && (hoverDy === 0 || hoverDy === 1)) {
-                      isHoverTarget = true;
-                      hoverBlockIndex = hoverDy * 2 + hoverDx;
-                    }
-                  }
-
-                  const previewBlock =
-                    isHoverTarget && hoverOrientedBlocks && hoverBlockIndex >= 0
-                      ? hoverOrientedBlocks[hoverBlockIndex]
-                      : null;
-
-                  // Anti-occlusion X-Ray opacity for placed blocks:
-                  // - Road Inspect Mode dims all buildings/trees uniformly to 0.24
-                  // - Hovering dims blocks underneath (0.22) and blocks directly in front of the target along camera view (0.34)
-                  let blockPopoutOpacity = isRoadInspect ? 0.24 : 1;
-                  if (placedBlock && isHoverActive && hoverPos && !isRoadInspect) {
-                    if (isHoverTarget) {
-                      blockPopoutOpacity = 0.22;
-                    } else if (!isTopDown && tilt > 10) {
-                      const distX =
-                        x < hoverPos.x ? hoverPos.x - x : x > hoverPos.x + 1 ? x - (hoverPos.x + 1) : 0;
-                      const distY =
-                        y < hoverPos.y ? hoverPos.y - y : y > hoverPos.y + 1 ? y - (hoverPos.y + 1) : 0;
-                      if (distX <= 2 && distY <= 2) {
-                        const cellDepth = x * frontDirX + y * frontDirY;
-                        if (cellDepth > hoverCenterDepth - 0.15) {
-                          blockPopoutOpacity = 0.34;
-                        }
-                      }
-                    }
-                  }
-
-                  const cellSurfaceZ = placedBlock ? getBlockExtrusionHeight(placedBlock.layer) : 0;
-                  const cellEdgeStatus = hoverBlockIndex >= 0 ? hoverOuterEdges[hoverBlockIndex] : null;
-
-                  return (
+                return (
+                  <div
+                    key={idx}
+                    className="absolute pointer-events-none overflow-visible diorama-stage-3d"
+                    style={{
+                      left: dx * CELL_SIZE,
+                      top: dy * CELL_SIZE,
+                      width: CELL_SIZE,
+                      height: CELL_SIZE
+                    }}
+                  >
+                    {/* Ground-Projected 2x2 Target Footprint (Eliminates 3D parallax aiming error) */}
                     <div
-                      key={key}
-                      data-grid-cell="true"
                       style={{
-                        width: CELL_SIZE,
-                        height: CELL_SIZE,
-                        backgroundColor: placedBlock
-                          ? 'transparent'
-                          : isNearCity
-                          ? 'var(--empty-cell-bg, rgba(174, 164, 142, 0.56))'
-                          : 'var(--empty-cell-bg, rgba(174, 164, 142, 0.34))',
-                        borderColor: placedBlock
-                          ? 'transparent'
-                          : 'var(--empty-grid-border, rgba(112, 102, 84, 0.35))'
+                        transform: `translateZ(${cellSurfaceZ + 1.2}px)`
                       }}
-                      className={`relative overflow-visible diorama-stage-3d pointer-events-none border flex items-center justify-center ${
-                        !placedBlock
-                          ? isNearCity
-                            ? 'diorama-socket-cell rounded-[4px]'
-                            : 'rounded-[3px]'
+                      className={`absolute inset-0 pointer-events-none ${
+                        hoverIsValid ? 'diorama-footprint-valid' : 'diorama-footprint-invalid'
+                      } ${
+                        dy === 0
+                          ? hoverIsValid
+                            ? 'border-t-2 border-t-[#4e8f5e] border-dashed'
+                            : 'border-t-2 border-t-[#d96b6b] border-dashed'
+                          : ''
+                      } ${
+                        dy === 1
+                          ? hoverIsValid
+                            ? 'border-b-2 border-b-[#4e8f5e] border-dashed'
+                            : 'border-b-2 border-b-[#d96b6b] border-dashed'
+                          : ''
+                      } ${
+                        dx === 0
+                          ? hoverIsValid
+                            ? 'border-l-2 border-l-[#4e8f5e] border-dashed'
+                            : 'border-l-2 border-l-[#d96b6b] border-dashed'
+                          : ''
+                      } ${
+                        dx === 1
+                          ? hoverIsValid
+                            ? 'border-r-2 border-r-[#4e8f5e] border-dashed'
+                            : 'border-r-2 border-r-[#d96b6b] border-dashed'
                           : ''
                       }`}
                     >
-                      {/* Calm Low-Contrast Outskirts Nature Terrain & Coordinate Marker on Empty Cells */}
-                      {!placedBlock && (
-                        <>
-                          <EmptyCellTerrain x={x} y={y} />
-                          <span
-                            className="absolute top-1 left-1.5 z-[1] text-[9px] font-mono pointer-events-none tabular-nums"
-                            style={{ color: 'var(--coord-text-color, rgba(141, 130, 113, 0.7))' }}
-                          >
-                            {x},{y}
-                          </span>
-                        </>
-                      )}
+                      <div
+                        className={`absolute w-2.5 h-2.5 ${
+                          hoverIsValid ? 'border-[#3f7f50]' : 'border-[#c85555]'
+                        } ${
+                          idx === 0
+                            ? 'top-0.5 left-0.5 border-t-2 border-l-2 rounded-tl-[2px]'
+                            : idx === 1
+                            ? 'top-0.5 right-0.5 border-t-2 border-r-2 rounded-tr-[2px]'
+                            : idx === 2
+                            ? 'bottom-0.5 left-0.5 border-b-2 border-l-2 rounded-bl-[2px]'
+                            : 'bottom-0.5 right-0.5 border-b-2 border-r-2 rounded-br-[2px]'
+                        }`}
+                      />
+                    </div>
 
-                      {/* Render Placed City Block */}
-                      {placedBlock && (
-                        <BlockCell
-                          block={placedBlock}
-                          size={CELL_SIZE}
-                          isSettling={placementBursts.some((b) => b.keys.has(key))}
-                          popoutOpacity={blockPopoutOpacity}
-                        />
-                      )}
+                    {/* Floating 3D Ghost Block + Road-Seam Highlights */}
+                    <div
+                      style={
+                        {
+                          '--city-tile-shade': '0',
+                          transform: `translateZ(${hoverBaseHeight + 13}px)`
+                        } as React.CSSProperties
+                      }
+                      className={`absolute inset-0 pointer-events-none overflow-visible diorama-stage-3d rounded-xl p-[2px] ${
+                        hoverIsValid
+                          ? 'bg-[#63a375]/20 ring-2 ring-[#5e9a6b]'
+                          : 'bg-[#d96b6b]/20 ring-2 ring-[#d96b6b]'
+                      }`}
+                    >
+                      <BlockCell
+                        block={{
+                          cardId: selectedCard.card.id,
+                          zone: previewBlock.zone,
+                          roads: previewBlock.roads,
+                          layer: 99,
+                          blockIndex: idx,
+                          rotation: selectedCard.rotation
+                        }}
+                        size={CELL_SIZE - 4}
+                        isGhost
+                        isValidGhost={hoverIsValid}
+                      />
 
-                      {/* Ground-Projected 2x2 Target Footprint (Eliminates 3D parallax aiming error) */}
-                      {isHoverTarget && previewBlock && (
+                      {cellEdgeStatus && (
                         <div
-                          style={{
-                            transform: `translateZ(${cellSurfaceZ + 1.2}px)`
-                          }}
-                          className={`absolute inset-0 pointer-events-none ${
-                            hoverIsValid ? 'diorama-footprint-valid' : 'diorama-footprint-invalid'
-                          } ${
-                            hoverDy === 0
-                              ? hoverIsValid
-                                ? 'border-t-2 border-t-[#4e8f5e] border-dashed'
-                                : 'border-t-2 border-t-[#d96b6b] border-dashed'
-                              : ''
-                          } ${
-                            hoverDy === 1
-                              ? hoverIsValid
-                                ? 'border-b-2 border-b-[#4e8f5e] border-dashed'
-                                : 'border-b-2 border-b-[#d96b6b] border-dashed'
-                              : ''
-                          } ${
-                            hoverDx === 0
-                              ? hoverIsValid
-                                ? 'border-l-2 border-l-[#4e8f5e] border-dashed'
-                                : 'border-l-2 border-l-[#d96b6b] border-dashed'
-                              : ''
-                          } ${
-                            hoverDx === 1
-                              ? hoverIsValid
-                                ? 'border-r-2 border-r-[#4e8f5e] border-dashed'
-                                : 'border-r-2 border-r-[#d96b6b] border-dashed'
-                              : ''
-                          }`}
-                          aria-hidden="true"
+                          className="absolute inset-0 pointer-events-none overflow-visible"
+                          style={{ transform: 'translateZ(11.5px)' }}
                         >
-                          {/* Subtle Corner Anchor Tick on Outer Corners of 2x2 Footprint */}
-                          <div
-                            className={`absolute w-2.5 h-2.5 ${
-                              hoverIsValid ? 'border-[#3f7f50]' : 'border-[#c85555]'
-                            } ${
-                              hoverBlockIndex === 0
-                                ? 'top-0.5 left-0.5 border-t-2 border-l-2 rounded-tl-[2px]'
-                                : hoverBlockIndex === 1
-                                ? 'top-0.5 right-0.5 border-t-2 border-r-2 rounded-tr-[2px]'
-                                : hoverBlockIndex === 2
-                                ? 'bottom-0.5 left-0.5 border-b-2 border-l-2 rounded-bl-[2px]'
-                                : 'bottom-0.5 right-0.5 border-b-2 border-r-2 rounded-br-[2px]'
-                            }`}
-                          />
-                        </div>
-                      )}
-
-                      {/* Render Floating 3D Hover Preview Overlay with Road-Seam Highlights */}
-                      {isHoverTarget && previewBlock && (
-                        <div
-                          style={
-                            {
-                              '--city-tile-shade': '0',
-                              transform: `translateZ(${hoverBaseHeight + 13}px)`
-                            } as React.CSSProperties
-                          }
-                          className={`absolute inset-0 pointer-events-none overflow-visible diorama-stage-3d rounded-xl p-[2px] ${
-                            hoverIsValid
-                              ? 'bg-[#63a375]/20 ring-2 ring-[#5e9a6b]'
-                              : 'bg-[#d96b6b]/20 ring-2 ring-[#d96b6b]'
-                          }`}
-                        >
-                          <BlockCell
-                            block={{
-                              cardId: selectedCard.card.id,
-                              zone: previewBlock.zone,
-                              roads: previewBlock.roads,
-                              layer: 99,
-                              blockIndex: hoverBlockIndex,
-                              rotation: selectedCard.rotation
-                            }}
-                            size={CELL_SIZE - 4}
-                            isGhost
-                            isValidGhost={hoverIsValid}
-                          />
-
-                          {/* Road Connection Seam Markers on Outer Perimeter Edges */}
-                          {cellEdgeStatus && (
-                            <div
-                              className="absolute inset-0 pointer-events-none overflow-visible"
-                              style={{ transform: 'translateZ(11.5px)' }}
-                              aria-hidden="true"
-                            >
-                              {(['top', 'right', 'bottom', 'left'] as const).map((dir) => {
-                                const status = cellEdgeStatus[dir];
-                                if (!status) return null;
-                                const posClass =
-                                  dir === 'top'
-                                    ? 'top-0 left-1/2'
-                                    : dir === 'right'
-                                    ? 'top-1/2 left-full'
-                                    : dir === 'bottom'
-                                    ? 'top-full left-1/2'
-                                    : 'top-1/2 left-0';
-                                return (
-                                  <div
-                                    key={dir}
-                                    className={`absolute ${posClass} rounded-full pointer-events-none ${
-                                      status === 'connect'
-                                        ? 'w-3.5 h-3.5 bg-[#fbbf24] border-2 border-[#fffdf9] shadow-md road-seam-badge'
-                                        : 'w-2 h-2 -translate-x-1/2 -translate-y-1/2 bg-[#78716c]/80 border border-[#fffdf9]/80'
-                                    }`}
-                                  />
-                                );
-                              })}
-                            </div>
-                          )}
+                          {(['top', 'right', 'bottom', 'left'] as const).map((dir) => {
+                            const status = cellEdgeStatus[dir];
+                            if (!status) return null;
+                            const posClass =
+                              dir === 'top'
+                                ? 'top-0 left-1/2'
+                                : dir === 'right'
+                                ? 'top-1/2 left-full'
+                                : dir === 'bottom'
+                                ? 'top-full left-1/2'
+                                : 'top-1/2 left-0';
+                            return (
+                              <div
+                                key={dir}
+                                className={`absolute ${posClass} rounded-full pointer-events-none ${
+                                  status === 'connect'
+                                    ? 'w-3.5 h-3.5 bg-[#fbbf24] border-2 border-[#fffdf9] shadow-md road-seam-badge'
+                                    : 'w-2 h-2 -translate-x-1/2 -translate-y-1/2 bg-[#78716c]/80 border border-[#fffdf9]/80'
+                                }`}
+                              />
+                            );
+                          })}
                         </div>
                       )}
                     </div>
-                  );
-                })}
-              </div>
-            );
-          })}
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
           {/* Screen-Aligned Upright Hover Placement Status Badge (High-Z Centered Billboard: Never Tilted or Clipped) */}
           {isHoverActive && hoverPos && (
@@ -1591,6 +1583,181 @@ export const CityGridBoard: React.FC<CityGridBoardProps> = ({
   );
 };
 
+interface EmptyBoardCellProps {
+  x: number;
+  y: number;
+  tier: EmptyCellTier;
+  showOuterOrnament: boolean;
+}
+
+/**
+ * Memoized Empty Grid Cell with Safe Distance-Based DOM Pruning:
+ * - 'near' (adjacent to city): full recessed diorama socket + EmptyCellTerrain + coord label
+ * - 'outer' (distance 2, valid 2x2 landing ring): clean minimal socket (skips heavy SVG & coord text on large cities)
+ * - 'far' (distance > 2, unreachable corners): pure lightweight blank spacer (0 inner DOM nodes)
+ */
+const EmptyBoardCell: React.FC<EmptyBoardCellProps> = React.memo(({ x, y, tier, showOuterOrnament }) => {
+  if (tier === 'far') {
+    return (
+      <div
+        data-grid-cell="true"
+        style={{ width: CELL_SIZE, height: CELL_SIZE }}
+        className="relative pointer-events-none shrink-0"
+      />
+    );
+  }
+
+  const isNear = tier === 'near';
+  return (
+    <div
+      data-grid-cell="true"
+      style={{
+        width: CELL_SIZE,
+        height: CELL_SIZE,
+        backgroundColor: isNear
+          ? 'var(--empty-cell-bg, rgba(174, 164, 142, 0.56))'
+          : 'var(--empty-cell-bg, rgba(174, 164, 142, 0.3))',
+        borderColor: 'var(--empty-grid-border, rgba(112, 102, 84, 0.35))'
+      }}
+      className={`relative overflow-visible pointer-events-none border flex items-center justify-center shrink-0 ${
+        isNear ? 'diorama-socket-cell rounded-[4px]' : 'rounded-[3px]'
+      }`}
+    >
+      {(isNear || showOuterOrnament) && (
+        <>
+          <EmptyCellTerrain x={x} y={y} />
+          <span
+            className="absolute top-1 left-1.5 z-[1] text-[9px] font-mono pointer-events-none tabular-nums"
+            style={{ color: 'var(--coord-text-color, rgba(141, 130, 113, 0.7))' }}
+          >
+            {x},{y}
+          </span>
+        </>
+      )}
+    </div>
+  );
+});
+
+interface StaticCityCellsProps {
+  grid: GridState;
+  renderMinX: number;
+  renderMaxX: number;
+  renderMinY: number;
+  renderMaxY: number;
+  placedBlockCount: number;
+  isRoadInspect: boolean;
+  settlingKeys: ReadonlySet<string>;
+  dimmedPopoutMap: ReadonlyMap<string, number>;
+}
+
+/**
+ * Memoized Static Board Grid:
+ * Completely decoupled from camera pan/zoom/yaw/tilt, hover preview 2x2 overlay, and PeerJS remote aim updates.
+ * Precomputes proximity tiers once per grid change to prune unreachable corner cell DOM on large cities.
+ */
+const StaticCityCells: React.FC<StaticCityCellsProps> = React.memo(({
+  grid,
+  renderMinX,
+  renderMaxX,
+  renderMinY,
+  renderMaxY,
+  placedBlockCount,
+  isRoadInspect,
+  settlingKeys,
+  dimmedPopoutMap
+}) => {
+  const showOuterOrnament = placedBlockCount < 12;
+
+  // Precompute active placement proximity sets once per committed move (O(placedBlocks), ~0.05ms)
+  const { nearEmptySet, outerEmptySet } = useMemo(() => {
+    const near = new Set<string>();
+    const outer = new Set<string>();
+    const placedKeys = Object.keys(grid);
+
+    for (const pk of placedKeys) {
+      const sep = pk.indexOf(',');
+      const bx = Number(pk.slice(0, sep));
+      const by = Number(pk.slice(sep + 1));
+
+      // Orthogonal neighbors (distance 1): active placement border
+      const n1 = `${bx - 1},${by}`;
+      const n2 = `${bx + 1},${by}`;
+      const n3 = `${bx},${by - 1}`;
+      const n4 = `${bx},${by + 1}`;
+      if (!grid[n1]) near.add(n1);
+      if (!grid[n2]) near.add(n2);
+      if (!grid[n3]) near.add(n3);
+      if (!grid[n4]) near.add(n4);
+
+      // Chebyshev <= 2 ring: valid 2x2 card landing footprint buffer
+      for (let dy = -2; dy <= 2; dy++) {
+        for (let dx = -2; dx <= 2; dx++) {
+          if (dx === 0 && dy === 0) continue;
+          const ok = `${bx + dx},${by + dy}`;
+          if (!grid[ok]) outer.add(ok);
+        }
+      }
+    }
+
+    return { nearEmptySet: near, outerEmptySet: outer };
+  }, [grid]);
+
+  const rowCount = renderMaxY - renderMinY + 1;
+  const colCount = renderMaxX - renderMinX + 1;
+
+  return (
+    <>
+      {Array.from({ length: rowCount }).map((_, rIdx) => {
+        const y = renderMinY + rIdx;
+        return (
+          <div key={`row-${y}`} className="flex overflow-visible diorama-stage-3d">
+            {Array.from({ length: colCount }).map((_, cIdx) => {
+              const x = renderMinX + cIdx;
+              const key = `${x},${y}`;
+              const placedBlock = grid[key];
+
+              if (!placedBlock) {
+                const tier: EmptyCellTier =
+                  placedBlockCount === 0 || nearEmptySet.has(key)
+                    ? 'near'
+                    : outerEmptySet.has(key)
+                    ? 'outer'
+                    : 'far';
+                return (
+                  <EmptyBoardCell
+                    key={key}
+                    x={x}
+                    y={y}
+                    tier={tier}
+                    showOuterOrnament={showOuterOrnament}
+                  />
+                );
+              }
+
+              const popoutOpacity = isRoadInspect ? 0.24 : (dimmedPopoutMap.get(key) ?? 1);
+              return (
+                <div
+                  key={key}
+                  data-grid-cell="true"
+                  style={{ width: CELL_SIZE, height: CELL_SIZE }}
+                  className="relative overflow-visible diorama-stage-3d pointer-events-none flex items-center justify-center shrink-0"
+                >
+                  <BlockCell
+                    block={placedBlock}
+                    size={CELL_SIZE}
+                    isSettling={settlingKeys.has(key)}
+                    popoutOpacity={popoutOpacity}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        );
+      })}
+    </>
+  );
+});
+
 interface BlockCellProps {
   block: PlacedBlock;
   size: number;
@@ -1599,6 +1766,32 @@ interface BlockCellProps {
   isSettling?: boolean;
   popoutOpacity?: number;
 }
+
+const areBlockCellPropsEqual = (prev: BlockCellProps, next: BlockCellProps): boolean => {
+  if (
+    prev.size !== next.size ||
+    prev.isGhost !== next.isGhost ||
+    prev.isValidGhost !== next.isValidGhost ||
+    prev.isSettling !== next.isSettling ||
+    prev.popoutOpacity !== next.popoutOpacity
+  ) {
+    return false;
+  }
+  const pb = prev.block;
+  const nb = next.block;
+  if (pb === nb) return true;
+  return (
+    pb.cardId === nb.cardId &&
+    pb.zone === nb.zone &&
+    pb.layer === nb.layer &&
+    pb.blockIndex === nb.blockIndex &&
+    pb.rotation === nb.rotation &&
+    !!pb.roads.top === !!nb.roads.top &&
+    !!pb.roads.right === !!nb.roads.right &&
+    !!pb.roads.bottom === !!nb.roads.bottom &&
+    !!pb.roads.left === !!nb.roads.left
+  );
+};
 
 const BlockCell: React.FC<BlockCellProps> = React.memo(({ block, size, isGhost, isValidGhost, isSettling, popoutOpacity = 1 }) => {
   const zoneInfo = ZONE_NAMES[block.zone];
@@ -1790,4 +1983,4 @@ const BlockCell: React.FC<BlockCellProps> = React.memo(({ block, size, isGhost, 
       </div>
     </div>
   );
-});
+}, areBlockCellPropsEqual);

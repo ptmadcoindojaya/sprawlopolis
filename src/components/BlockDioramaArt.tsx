@@ -769,6 +769,28 @@ const MiniCrates: React.FC<{ x: number; y: number; accent: string }> = ({ x, y, 
   </g>
 );
 
+const areBlockDioramaPropsEqual = (
+  prev: BlockDioramaArtProps,
+  next: BlockDioramaArtProps
+): boolean => {
+  if (
+    prev.cardId !== next.cardId ||
+    prev.blockIndex !== next.blockIndex ||
+    prev.zone !== next.zone ||
+    prev.layer !== next.layer ||
+    prev.sizeMode !== next.sizeMode
+  ) {
+    return false;
+  }
+  return (
+    !!prev.roads.top === !!next.roads.top &&
+    !!prev.roads.right === !!next.roads.right &&
+    !!prev.roads.bottom === !!next.roads.bottom &&
+    !!prev.roads.left === !!next.roads.left &&
+    !!prev.roads.internalConnect === !!next.roads.internalConnect
+  );
+};
+
 export const BlockDioramaArt: React.FC<BlockDioramaArtProps> = React.memo(({
   cardId,
   blockIndex,
@@ -1974,4 +1996,4 @@ export const BlockDioramaArt: React.FC<BlockDioramaArtProps> = React.memo(({
       </div>
     </div>
   );
-});
+}, areBlockDioramaPropsEqual);

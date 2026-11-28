@@ -256,6 +256,21 @@
   animation: smokeRise 3.1s ease-out infinite;
 }
 
+/* Large-city & active-camera animation guards (keeps 60fps smooth on 32+ blocks & during drag/orbit) */
+.diorama-large-city .html-flower-sway,
+.diorama-large-city .html-sign-sway {
+  animation: none;
+}
+
+.camera-interacting .html-tree-sway,
+.camera-interacting .html-flower-sway,
+.camera-interacting .html-sign-sway,
+.camera-interacting .html-duck-bob,
+.camera-interacting .html-water-ripple,
+.camera-interacting .html-smoke-rise {
+  animation-play-state: paused;
+}
+
 /* Tactile Card Landing Spring Settle, Soft Warm Dust Puff Burst & Micro Bounce Pebbles */
 @keyframes tileLandSettle {
   0% {
